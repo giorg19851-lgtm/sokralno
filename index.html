@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>黒白リサジュー・音響改造 (2D版)</title>
+    <title>黒白スーパーフォーミュラ + 音響分析器</title>
     <style>
         * {
             user-select: none;
@@ -15,7 +15,6 @@
             font-family: 'Courier New', monospace;
             overflow: hidden;
         }
-        /* Панели */
         .panel {
             position: absolute;
             background: #000;
@@ -40,7 +39,6 @@
             color: #ccc;
             font-size: 11px;
         }
-        /* Крутилка */
         .knob-row {
             display: flex;
             align-items: center;
@@ -116,30 +114,35 @@
             gap: 8px;
             margin: 8px 0;
         }
+        .small-text {
+            font-size: 8px;
+        }
     </style>
 </head>
 <body>
 
 <div id="mainCanvasContainer" style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:0; display:flex; justify-content:center; align-items:center;">
-    <canvas id="lissajousCanvas" width="800" height="600" style="width:80%; height:auto; border:2px solid #fff; background:#000;"></canvas>
+    <canvas id="mainCanvas" width="800" height="600" style="width:80%; height:auto; border:2px solid #fff; background:#000;"></canvas>
 </div>
 
-<!-- Панель 1: Параметры Лиссажу -->
-<div id="panelLiss" class="panel" style="top:20px; left:20px; width:280px;">
-    <div class="panel-header">◈ リサジュー / グリッチ</div>
+<!-- Панель 1: Управление суперформулой -->
+<div id="panelSuper" class="panel" style="top:20px; left:20px; width:300px;">
+    <div class="panel-header">◈ スーパーフォーミュラ</div>
     <div class="panel-content">
-        <div class="knob-row"><span>周波数 X</span><div class="knob" id="knobFX"></div><span id="freqX_val" class="knob-value">3.00</span></div>
-        <div class="knob-row"><span>周波数 Y</span><div class="knob" id="knobFY"></div><span id="freqY_val" class="knob-value">4.00</span></div>
-        <div class="knob-row"><span>位相 δ</span><div class="knob" id="knobPh"></div><span id="phase_val" class="knob-value">90°</span></div>
-        <div class="knob-row"><span>グリッチ強度</span><div class="knob" id="knobGlitch"></div><span id="glitch_val" class="knob-value">0.00</span></div>
-        <div class="knob-row"><span>ピクセル分解</span><div class="knob" id="knobPixel"></div><span id="pixel_val" class="knob-value">1</span></div>
-        <div class="flex"><button id="dotModeBtn">◉ 点/線切替</button><button id="invertBtn">☯ 反転</button></div>
+        <div class="knob-row"><span>m (対称性)</span><div class="knob" id="knobM"></div><span id="m_val" class="knob-value">5.0</span></div>
+        <div class="knob-row"><span>n1 (形状)</span><div class="knob" id="knobN1"></div><span id="n1_val" class="knob-value">1.0</span></div>
+        <div class="knob-row"><span>n2 (丸み)</span><div class="knob" id="knobN2"></div><span id="n2_val" class="knob-value">1.0</span></div>
+        <div class="knob-row"><span>n3 (先端)</span><div class="knob" id="knobN3"></div><span id="n3_val" class="knob-value">1.0</span></div>
+        <div class="knob-row"><span>半径 A</span><div class="knob" id="knobRadius"></div><span id="radius_val" class="knob-value">1.0</span></div>
+        <div class="knob-row"><span>回転 angle</span><div class="knob" id="knobRotAngle"></div><span id="rot_val" class="knob-value">0.0</span></div>
+        <div class="flex"><button id="shapeModeBtn">◉ 形状モード切替</button><button id="invertBtn">☯ 反転</button></div>
+        <div class="status small-text" id="shapeModeStatus">現在: スーパーフォーミュラ</div>
     </div>
 </div>
 
-<!-- Панель 2: Аудиоэффекты -->
-<div id="panelFx" class="panel" style="top:20px; left:320px; width:280px;">
-    <div class="panel-header">⚡ 音響改造</div>
+<!-- Панель 2: Аудиоэффекты + тембральный анализ -->
+<div id="panelFx" class="panel" style="top:20px; left:340px; width:280px;">
+    <div class="panel-header">⚡ 音響・音色分析</div>
     <div class="panel-content">
         <div class="knob-row"><span>Low EQ</span><div class="knob" id="knobLowEQ"></div><span id="lowEQ_val" class="knob-value">0dB</span></div>
         <div class="knob-row"><span>Mid EQ</span><div class="knob" id="knobMidEQ"></div><span id="midEQ_val" class="knob-value">0dB</span></div>
@@ -150,58 +153,321 @@
     </div>
 </div>
 
-<!-- Панель 3: Аудиовход + визуализация -->
-<div id="panelAudio" class="panel" style="top:20px; right:20px; width:300px;">
-    <div class="panel-header">🎙️ 音声入力 ｜ 計測</div>
+<!-- Панель 3: Аудиовход + тембральные метры -->
+<div id="panelAudio" class="panel" style="top:20px; right:20px; width:320px;">
+    <div class="panel-header">🎙️ 音声入力・音色分析</div>
     <div class="panel-content">
-        <canvas id="waveCanvas" width="280" height="70" style="width:100%; height:70px;"></canvas>
-        <canvas id="specCanvas" width="280" height="70" style="width:100%; height:70px;"></canvas>
+        <canvas id="spectrogramCanvas" width="280" height="120" style="width:100%; height:120px;"></canvas>
+        <canvas id="spectrumCanvas" width="280" height="80" style="width:100%; height:80px;"></canvas>
         <div class="meter"><div class="meter-bar"><div id="vuFill" class="meter-fill"></div></div><div id="vuText" style="font-size:9px;">0%</div></div>
+        <div class="meter"><div class="meter-bar"><div id="bassFill" class="meter-fill"></div></div><div class="small-text">低域</div></div>
+        <div class="meter"><div class="meter-bar"><div id="highFill" class="meter-fill"></div></div><div class="small-text">高域</div></div>
         <div class="flex"><button id="micBtn">🎤 マイク起動</button><button id="uploadBtn">📁 ファイル読込</button></div>
         <div class="status" id="audioStatus">⚫ オーディオ停止</div>
     </div>
 </div>
 
-<!-- Панель 4: Дополнительные объекты -->
-<div id="panelObj" class="panel" style="bottom:20px; left:20px; width:280px;">
-    <div class="panel-header">▣ 追加造形物</div>
+<!-- Панель 4: Анализатор спектра (график огибающей) -->
+<div id="panelSpec" class="panel" style="bottom:20px; left:20px; width:300px;">
+    <div class="panel-header">▣ スペクトル エンベロープ</div>
     <div class="panel-content">
-        <select id="objType">
-            <option value="circle">円</option><option value="rect">四角</option><option value="triangle">三角</option>
-        </select>
-        <div class="knob-row"><span>サイズ</span><div class="knob" id="knobSize"></div><span id="size_val" class="knob-value">30</span></div>
-        <div class="flex"><button id="addObjBtn">➕ 追加</button><button id="clearObjBtn">🗑️ 全削除</button></div>
-        <div class="status" id="objCount">生成数: 0</div>
+        <canvas id="envelopeCanvas" width="280" height="120" style="width:100%; height:120px;"></canvas>
+        <div class="status" id="dominantFreq">ドミナント周波数: — Hz</div>
     </div>
 </div>
 
 <script>
-    // ---------- 1. キャンバスと描画 ----------
-    const canvas = document.getElementById('lissajousCanvas');
+    // ---------- グローバル変数 ----------
+    const canvas = document.getElementById('mainCanvas');
     const ctx = canvas.getContext('2d');
-    let width = canvas.width, height = canvas.height;
+    let width = 800, height = 600;
     let centerX = width/2, centerY = height/2;
 
     // パラメータ
     let params = {
+        shapeMode: 'super',   // 'super' или 'lissajous'
+        super_m: 5.0, super_n1: 1.0, super_n2: 1.0, super_n3: 1.0, super_r: 1.0, super_rot: 0.0,
         freqX: 3.0, freqY: 4.0, phase: 90,
         glitch: 0, pixel: 1,
-        invert: false, dotMode: false,
+        invert: false,
         lowEQ: 0, midEQ: 0, highEQ: 0,
         compThresh: -20, distAmt: 0, reverbMix: 0,
-        objSize: 30
+        // для визуализации доп. эффектов
+        soundSensitivity: 1.0
     };
 
-    // 追加オブジェクトの配列
-    let extraObjects = [];  // каждый: {type, x, y, size}
-
-    // オーディオ関連
+    // Аудио данные
     let audioCtx = null, sourceNode = null, analyser = null;
     let isAudioActive = false;
     let freqData = [], timeData = [];
-    let avgVolume = 0;
+    let avgVolume = 0, bassEnergy = 0, highEnergy = 0;
+    let spectrogramImage = null;      // для накопления спектрограммы
+    let lastFreqArray = [];
 
-    // ---------- 2. ノブ制御 (ユニバーサル) ----------
+    // Суперформула: r(phi) = ( |cos(m*phi/4)/a|^n2 + |sin(m*phi/4)/b|^n3 ) ^ (-1/n1)
+    function superformula(phi, m, n1, n2, n3, r0 = 1.0) {
+        const a = 1.0, b = 1.0; // можно вынести в параметры, но для простоты =1
+        const term1 = Math.pow(Math.abs(Math.cos(m * phi / 4) / a), n2);
+        const term2 = Math.pow(Math.abs(Math.sin(m * phi / 4) / b), n3);
+        const r = Math.pow(term1 + term2, -1 / n1);
+        return r0 * (isNaN(r) ? 1 : r);
+    }
+
+    // Функция отрисовки фигуры (суперформула или Лиссажу)
+    let animTime = 0;
+    function drawShape() {
+        ctx.clearRect(0, 0, width, height);
+        if (params.invert) ctx.fillStyle = '#fff';
+        else ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, width, height);
+        ctx.strokeStyle = params.invert ? '#000' : '#fff';
+        ctx.fillStyle = params.invert ? '#000' : '#fff';
+        
+        const vol = isAudioActive ? avgVolume : 0;
+        const glitch = params.glitch + vol * 0.6;
+        const pixelStep = params.pixel;
+        
+        if (params.shapeMode === 'super') {
+            // Суперформула - создание сложных симметричных фигур
+            const m = params.super_m;
+            const n1 = params.super_n1;
+            const n2 = params.super_n2;
+            const n3 = params.super_n3;
+            const rad = params.super_r * (1 + vol * 0.3); // пульсация от громкости
+            const rot = params.super_rot * Math.PI/180;
+            const points = 2000;
+            ctx.beginPath();
+            let first = true;
+            for (let i = 0; i <= points; i++) {
+                let phi = (i / points) * Math.PI * 2;
+                let r = superformula(phi, m, n1, n2, n3, rad);
+                // добавим глитч и шум
+                if (glitch > 0.01) {
+                    r += Math.sin(phi * 37) * glitch * 0.15;
+                    if (Math.random() < glitch * 0.05) r += (Math.random() - 0.5) * 0.2;
+                }
+                let x = r * Math.cos(phi + rot) * (Math.min(width,height)/3);
+                let y = r * Math.sin(phi + rot) * (Math.min(width,height)/3);
+                if (pixelStep > 1) {
+                    let step = pixelStep * 3;
+                    x = Math.round(x / step) * step;
+                    y = Math.round(y / step) * step;
+                }
+                const sx = centerX + x;
+                const sy = centerY + y;
+                if (first) { ctx.moveTo(sx, sy); first = false; }
+                else ctx.lineTo(sx, sy);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        } else {
+            // Лиссажу (классика)
+            const a = params.freqX;
+            const b = params.freqY;
+            const phaseRad = params.phase * Math.PI/180;
+            const points = 2000;
+            ctx.beginPath();
+            let first = true;
+            for (let i = 0; i <= points; i++) {
+                let t = (i / points) * Math.PI * 2;
+                let x = Math.sin(a * t + phaseRad + animTime * 0.2) * (width/3);
+                let y = Math.sin(b * t) * (height/3);
+                if (glitch > 0.01) {
+                    x += Math.sin(t * 37) * glitch * 20;
+                    y += Math.cos(t * 41) * glitch * 20;
+                    if (Math.random() < glitch * 0.05) { x += (Math.random()-0.5)*15; y += (Math.random()-0.5)*15; }
+                }
+                if (pixelStep > 1) {
+                    let step = pixelStep * 2;
+                    x = Math.round(x / step) * step;
+                    y = Math.round(y / step) * step;
+                }
+                const sx = centerX + x;
+                const sy = centerY + y;
+                if (first) { ctx.moveTo(sx, sy); first = false; }
+                else ctx.lineTo(sx, sy);
+            }
+            ctx.stroke();
+        }
+    }
+
+    // ---------- オーディオ分析とエフェクト ----------
+    function createAudioChain() {
+        if (!audioCtx) return;
+        const low = audioCtx.createBiquadFilter(); low.type = 'lowshelf'; low.frequency.value = 200;
+        const mid = audioCtx.createBiquadFilter(); mid.type = 'peaking'; mid.frequency.value = 1000; mid.Q.value = 1;
+        const high = audioCtx.createBiquadFilter(); high.type = 'highshelf'; high.frequency.value = 5000;
+        const comp = audioCtx.createDynamicsCompressor(); comp.knee.value = 6;
+        const shaper = audioCtx.createWaveShaper();
+        const reverb = audioCtx.createConvolver();
+        const dryWet = audioCtx.createGain();
+        const master = audioCtx.createGain();
+        const analys = audioCtx.createAnalyser(); analys.fftSize = 512;
+        window._audioNodes = { low, mid, high, comp, shaper, reverb, dryWet, master, analys };
+        updateAudioFX();
+    }
+    function makeDistCurve(amt) {
+        let n = 44100, curve = new Float32Array(n);
+        for (let i=0; i<n; i++) {
+            let x = (i*2/n)-1;
+            curve[i] = (3+amt)*x*Math.PI*0.7/(Math.PI+amt*Math.abs(x));
+        }
+        return curve;
+    }
+    function updateAudioFX() {
+        if (!window._audioNodes) return;
+        const n = window._audioNodes;
+        n.low.gain.value = params.lowEQ;
+        n.mid.gain.value = params.midEQ;
+        n.high.gain.value = params.highEQ;
+        n.comp.threshold.value = params.compThresh;
+        n.comp.ratio.value = 4;
+        n.shaper.curve = makeDistCurve(params.distAmt);
+        if (params.reverbMix > 0.01 && audioCtx) {
+            const sr = audioCtx.sampleRate;
+            const len = sr * 1.2;
+            const impulse = audioCtx.createBuffer(2, len, sr);
+            for (let ch=0; ch<2; ch++) {
+                let chan = impulse.getChannelData(ch);
+                for (let i=0; i<len; i++) chan[i] = (Math.random()*2-1)*Math.exp(-i/(sr*0.3));
+            }
+            n.reverb.buffer = impulse;
+        } else n.reverb.buffer = null;
+        n.dryWet.gain.value = Math.min(1.0, params.reverbMix);
+    }
+    async function startAudioWithStream(stream) {
+        if (audioCtx) await audioCtx.close();
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        createAudioChain();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const n = window._audioNodes;
+        source.connect(n.low);
+        n.low.connect(n.mid); n.mid.connect(n.high); n.high.connect(n.comp);
+        n.comp.connect(n.shaper);
+        n.shaper.connect(n.master);
+        n.shaper.connect(n.reverb); n.reverb.connect(n.dryWet); n.dryWet.connect(n.master);
+        n.master.connect(n.analys);
+        n.analys.connect(audioCtx.destination);
+        await audioCtx.resume();
+        isAudioActive = true;
+        document.getElementById('audioStatus').innerText = '🎤 マイク + エフェクトON';
+    }
+    async function startAudioWithFile(file) {
+        if (audioCtx) await audioCtx.close();
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        createAudioChain();
+        const buf = await file.arrayBuffer();
+        const decoded = await audioCtx.decodeAudioData(buf);
+        const bs = audioCtx.createBufferSource();
+        bs.buffer = decoded; bs.loop = true;
+        const n = window._audioNodes;
+        bs.connect(n.low);
+        n.low.connect(n.mid); n.mid.connect(n.high); n.high.connect(n.comp);
+        n.comp.connect(n.shaper);
+        n.shaper.connect(n.master);
+        n.shaper.connect(n.reverb); n.reverb.connect(n.dryWet); n.dryWet.connect(n.master);
+        n.master.connect(n.analys);
+        n.analys.connect(audioCtx.destination);
+        bs.start(0);
+        await audioCtx.resume();
+        isAudioActive = true;
+        document.getElementById('audioStatus').innerHTML = `▶️ ${file.name.slice(0,24)}`;
+    }
+    document.getElementById('micBtn').onclick = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            await startAudioWithStream(stream);
+        } catch(e) { document.getElementById('audioStatus').innerText = 'マイクエラー'; }
+    };
+    document.getElementById('uploadBtn').onclick = () => {
+        let inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'audio/*';
+        inp.onchange = async (e) => { if(e.target.files[0]) await startAudioWithFile(e.target.files[0]); };
+        inp.click();
+    };
+
+    function updateAudioMeters() {
+        if (!isAudioActive || !window._audioNodes?.analys) { avgVolume *= 0.98; bassEnergy *= 0.98; highEnergy *= 0.98; return; }
+        const analys = window._audioNodes.analys;
+        const freqLen = analys.frequencyBinCount;
+        if (freqData.length !== freqLen) {
+            freqData = new Uint8Array(freqLen);
+            timeData = new Uint8Array(analyser.fftSize);
+        }
+        analys.getByteFrequencyData(freqData);
+        analys.getByteTimeDomainData(timeData);
+        let sum = 0, bass = 0, high = 0;
+        for (let i=0; i<freqLen; i++) {
+            let v = freqData[i]/255;
+            sum += v;
+            if (i < 12) bass += v;
+            if (i > 60) high += v;
+        }
+        avgVolume = sum / freqLen;
+        bassEnergy = bass / 12;
+        highEnergy = high / (freqLen-60);
+        const vu = Math.min(1.0, avgVolume*1.5);
+        document.getElementById('vuFill').style.width = (vu*100)+'%';
+        document.getElementById('vuText').innerText = Math.floor(vu*100)+'%';
+        document.getElementById('bassFill').style.width = (Math.min(1.0, bassEnergy*1.5)*100)+'%';
+        document.getElementById('highFill').style.width = (Math.min(1.0, highEnergy*1.5)*100)+'%';
+
+        // Спектрограмма (бегущая колонка)
+        const specCanvas = document.getElementById('spectrumCanvas');
+        const sCtx = specCanvas.getContext('2d');
+        const w = specCanvas.width, h = specCanvas.height;
+        if (freqData.length) {
+            // сдвиг влево
+            const imgData = sCtx.getImageData(1, 0, w-1, h);
+            sCtx.putImageData(imgData, 0, 0);
+            sCtx.fillStyle = '#000';
+            sCtx.fillRect(w-1, 0, 1, h);
+            for (let i=0; i<freqData.length; i++) {
+                let barH = (freqData[i]/255) * h;
+                sCtx.fillStyle = '#fff';
+                sCtx.fillRect(w-1, h-barH, 1, barH);
+            }
+        }
+
+        // Спектр (обычный столбчатый)
+        const specCanvas2 = document.getElementById('spectrumCanvas');
+        const sCtx2 = specCanvas2.getContext('2d');
+        sCtx2.fillStyle = '#000';
+        sCtx2.fillRect(0, 0, specCanvas2.width, specCanvas2.height);
+        if (freqData.length) {
+            let bw = specCanvas2.width / freqLen;
+            for (let i=0; i<freqLen; i++) {
+                let h = (freqData[i]/255) * specCanvas2.height;
+                sCtx2.fillStyle = '#fff';
+                sCtx2.fillRect(i*bw, specCanvas2.height-h, Math.max(1,bw-1), h);
+            }
+        }
+
+        // Огибающая спектра (envelope)
+        const envCanvas = document.getElementById('envelopeCanvas');
+        const eCtx = envCanvas.getContext('2d');
+        eCtx.fillStyle = '#000';
+        eCtx.fillRect(0, 0, envCanvas.width, envCanvas.height);
+        if (freqData.length) {
+            const step = Math.floor(freqData.length / envCanvas.width);
+            eCtx.beginPath();
+            for (let x=0; x<envCanvas.width; x++) {
+                let idx = Math.min(freqData.length-1, x*step);
+                let val = freqData[idx]/255;
+                let y = envCanvas.height - val * envCanvas.height;
+                if (x===0) eCtx.moveTo(x, y);
+                else eCtx.lineTo(x, y);
+            }
+            eCtx.strokeStyle = '#fff';
+            eCtx.stroke();
+        }
+        // доминантная частота
+        let maxIdx = 0;
+        for (let i=0; i<freqData.length; i++) if (freqData[i] > freqData[maxIdx]) maxIdx = i;
+        const dominantHz = (maxIdx * audioCtx.sampleRate) / analys.fftSize;
+        document.getElementById('dominantFreq').innerHTML = `ドミナント周波数: ${Math.round(dominantHz)} Hz`;
+    }
+
+    // ---------- ノブ制御 ----------
     function makeKnob(knobId, minVal, maxVal, initVal, callback, isInt=false, suffix='') {
         const knob = document.getElementById(knobId);
         const span = document.getElementById(knobId.replace('knob','')+'_val');
@@ -236,284 +502,59 @@
         });
         return { set: setValue };
     }
-
-    makeKnob('knobFX', 0.5, 9.0, 3.0, v => { params.freqX = v; });
-    makeKnob('knobFY', 0.5, 9.0, 4.0, v => { params.freqY = v; });
-    makeKnob('knobPh', 0, 360, 90, v => { params.phase = v; });
-    makeKnob('knobGlitch', 0, 1.5, 0, v => { params.glitch = v; });
-    makeKnob('knobPixel', 1, 12, 1, v => { params.pixel = Math.floor(v); });
+    // Суперформула параметры
+    makeKnob('knobM', 0.5, 20, 5.0, v => { params.super_m = v; });
+    makeKnob('knobN1', 0.1, 10, 1.0, v => { params.super_n1 = v; });
+    makeKnob('knobN2', 0.1, 10, 1.0, v => { params.super_n2 = v; });
+    makeKnob('knobN3', 0.1, 10, 1.0, v => { params.super_n3 = v; });
+    makeKnob('knobRadius', 0.2, 2.5, 1.0, v => { params.super_r = v; });
+    makeKnob('knobRotAngle', -180, 180, 0, v => { params.super_rot = v; });
+    // Аудиоэффекты
     makeKnob('knobLowEQ', -12, 12, 0, v => { params.lowEQ = v; updateAudioFX(); });
     makeKnob('knobMidEQ', -12, 12, 0, v => { params.midEQ = v; updateAudioFX(); });
     makeKnob('knobHighEQ', -12, 12, 0, v => { params.highEQ = v; updateAudioFX(); });
     makeKnob('knobThresh', -40, 0, -20, v => { params.compThresh = v; updateAudioFX(); });
     makeKnob('knobDist', 0, 1.2, 0, v => { params.distAmt = v; updateAudioFX(); });
     makeKnob('knobReverb', 0, 1.0, 0, v => { params.reverbMix = v; updateAudioFX(); });
-    makeKnob('knobSize', 10, 80, 30, v => { params.objSize = v; });
 
-    document.getElementById('dotModeBtn').onclick = () => { params.dotMode = !params.dotMode; };
+    document.getElementById('shapeModeBtn').onclick = () => {
+        params.shapeMode = params.shapeMode === 'super' ? 'lissajous' : 'super';
+        document.getElementById('shapeModeStatus').innerText = params.shapeMode === 'super' ? '現在: スーパーフォーミュラ' : '現在: リサジュー';
+    };
     document.getElementById('invertBtn').onclick = () => { params.invert = !params.invert; };
 
-    // ---------- 3. オーディオエフェクトチェイン ----------
-    function createAudioChain() {
-        if (!audioCtx) return;
-        // Создаём узлы
-        const low = audioCtx.createBiquadFilter(); low.type = 'lowshelf'; low.frequency.value = 200;
-        const mid = audioCtx.createBiquadFilter(); mid.type = 'peaking'; mid.frequency.value = 1000; mid.Q.value = 1;
-        const high = audioCtx.createBiquadFilter(); high.type = 'highshelf'; high.frequency.value = 5000;
-        const comp = audioCtx.createDynamicsCompressor(); comp.knee.value = 6;
-        const shaper = audioCtx.createWaveShaper();
-        const reverb = audioCtx.createConvolver();
-        const dryWet = audioCtx.createGain();
-        const master = audioCtx.createGain();
-        const analys = audioCtx.createAnalyser(); analys.fftSize = 512;
-        // Сохраняем глобально
-        window.eqLow = low; window.eqMid = mid; window.eqHigh = high;
-        window.compressor = comp; window.waveshaper = shaper;
-        window.reverbNode = reverb; window.reverbDryWet = dryWet;
-        window.masterGain = master; window.analyser = analys;
-        updateAudioFX();
-        // Подключение (позже подключим source)
-    }
-    function makeDistCurve(amt) {
-        let n = 44100, curve = new Float32Array(n);
-        for (let i = 0; i < n; i++) {
-            let x = (i * 2 / n) - 1;
-            curve[i] = (3 + amt) * x * Math.PI * 0.7 / (Math.PI + amt * Math.abs(x));
-        }
-        return curve;
-    }
-    function updateAudioFX() {
-        if (!window.eqLow) return;
-        window.eqLow.gain.value = params.lowEQ;
-        window.eqMid.gain.value = params.midEQ;
-        window.eqHigh.gain.value = params.highEQ;
-        window.compressor.threshold.value = params.compThresh;
-        window.compressor.ratio.value = 4; // фиксировано для простоты
-        window.waveshaper.curve = makeDistCurve(params.distAmt);
-        if (params.reverbMix > 0.01 && audioCtx) {
-            const sr = audioCtx.sampleRate;
-            const len = sr * 1.2;
-            const impulse = audioCtx.createBuffer(2, len, sr);
-            for (let ch = 0; ch < 2; ch++) {
-                let chan = impulse.getChannelData(ch);
-                for (let i = 0; i < len; i++) chan[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.3));
-            }
-            window.reverbNode.buffer = impulse;
-        } else window.reverbNode.buffer = null;
-        window.reverbDryWet.gain.value = Math.min(1.0, params.reverbMix);
-    }
-    async function startAudioWithStream(stream) {
-        if (audioCtx) await audioCtx.close();
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        createAudioChain();
-        const source = audioCtx.createMediaStreamSource(stream);
-        source.connect(window.eqLow);
-        window.eqLow.connect(window.eqMid); window.eqMid.connect(window.eqHigh);
-        window.eqHigh.connect(window.compressor);
-        window.compressor.connect(window.waveshaper);
-        window.waveshaper.connect(window.masterGain);
-        window.waveshaper.connect(window.reverbNode); window.reverbNode.connect(window.reverbDryWet); window.reverbDryWet.connect(window.masterGain);
-        window.masterGain.connect(window.analyser);
-        window.analyser.connect(audioCtx.destination);
-        await audioCtx.resume();
-        isAudioActive = true;
-        document.getElementById('audioStatus').innerText = '🎤 マイク + エフェクトON';
-    }
-    async function startAudioWithFile(file) {
-        if (audioCtx) await audioCtx.close();
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        createAudioChain();
-        const buf = await file.arrayBuffer();
-        const decoded = await audioCtx.decodeAudioData(buf);
-        const bs = audioCtx.createBufferSource();
-        bs.buffer = decoded; bs.loop = true;
-        bs.connect(window.eqLow);
-        // та же цепь
-        window.eqLow.connect(window.eqMid); window.eqMid.connect(window.eqHigh);
-        window.eqHigh.connect(window.compressor);
-        window.compressor.connect(window.waveshaper);
-        window.waveshaper.connect(window.masterGain);
-        window.waveshaper.connect(window.reverbNode); window.reverbNode.connect(window.reverbDryWet); window.reverbDryWet.connect(window.masterGain);
-        window.masterGain.connect(window.analyser);
-        window.analyser.connect(audioCtx.destination);
-        bs.start(0);
-        await audioCtx.resume();
-        isAudioActive = true;
-        document.getElementById('audioStatus').innerHTML = `▶️ ${file.name.slice(0,24)}`;
-    }
-    document.getElementById('micBtn').onclick = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            await startAudioWithStream(stream);
-        } catch(e) { document.getElementById('audioStatus').innerText = 'マイクエラー'; }
-    };
-    document.getElementById('uploadBtn').onclick = () => {
-        let inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'audio/*';
-        inp.onchange = async (e) => { if(e.target.files[0]) await startAudioWithFile(e.target.files[0]); };
-        inp.click();
-    };
-
-    function updateAudioMeters() {
-        if (!isAudioActive || !window.analyser) { avgVolume *= 0.98; return; }
-        const freqLen = window.analyser.frequencyBinCount;
-        if (freqData.length !== freqLen) { freqData = new Uint8Array(freqLen); timeData = new Uint8Array(window.analyser.fftSize); }
-        window.analyser.getByteFrequencyData(freqData);
-        window.analyser.getByteTimeDomainData(timeData);
-        let sum = 0;
-        for (let i=0; i<freqLen; i++) sum += freqData[i];
-        avgVolume = sum / freqLen / 255;
-        const vu = Math.min(1.0, avgVolume * 1.5);
-        document.getElementById('vuFill').style.width = (vu*100)+'%';
-        document.getElementById('vuText').innerText = Math.floor(vu*100)+'%';
-        // осциллограф
-        const wCanvas = document.getElementById('waveCanvas');
-        const wCtx = wCanvas.getContext('2d');
-        wCtx.fillStyle = '#000'; wCtx.fillRect(0,0,wCanvas.width,wCanvas.height);
-        if(timeData.length) {
-            wCtx.beginPath(); wCtx.strokeStyle = '#fff';
-            let step = timeData.length / wCanvas.width;
-            for(let x=0; x<wCanvas.width; x++) {
-                let idx = Math.floor(x*step);
-                let y = wCanvas.height/2 + ((timeData[idx]-128)/128)*(wCanvas.height/2-4);
-                if(x===0) wCtx.moveTo(x,y); else wCtx.lineTo(x,y);
-            }
-            wCtx.stroke();
-        }
-        // спектр
-        const sCanvas = document.getElementById('specCanvas');
-        const sCtx = sCanvas.getContext('2d');
-        sCtx.fillStyle = '#000'; sCtx.fillRect(0,0,sCanvas.width,sCanvas.height);
-        if(freqData.length) {
-            let bw = sCanvas.width / freqLen;
-            for(let i=0; i<freqLen; i++) {
-                let h = (freqData[i]/255)*sCanvas.height;
-                sCtx.fillStyle = '#fff';
-                sCtx.fillRect(i*bw, sCanvas.height-h, Math.max(1,bw-1), h);
-            }
-        }
-    }
-
-    // ---------- 4. 追加オブジェクト ----------
-    function addObject() {
-        const type = document.getElementById('objType').value;
-        const size = params.objSize;
-        extraObjects.push({
-            type: type,
-            x: Math.random() * width,
-            y: Math.random() * height,
-            size: size,
-        });
-        document.getElementById('objCount').innerText = `生成数: ${extraObjects.length}`;
-    }
-    function clearObjects() {
-        extraObjects = [];
-        document.getElementById('objCount').innerText = `生成数: 0`;
-    }
-    document.getElementById('addObjBtn').onclick = addObject;
-    document.getElementById('clearObjBtn').onclick = clearObjects;
-
-    // ---------- 5. Отрисовка Лиссажу и доп. объектов ----------
-    let animTime = 0;
-    function drawLissajous() {
-        ctx.clearRect(0, 0, width, height);
-        if (params.invert) ctx.fillStyle = '#fff';
-        else ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, width, height);
-        ctx.strokeStyle = params.invert ? '#000' : '#fff';
-        ctx.fillStyle = params.invert ? '#000' : '#fff';
-        
-        const a = params.freqX;
-        const b = params.freqY;
-        const phaseRad = params.phase * Math.PI/180;
-        const gl = params.glitch;
-        const pix = params.pixel;
-        const volImpact = isAudioActive ? avgVolume : 0;
-        const dynamicGlitch = gl + volImpact * 0.5;
-        const points = 2000;
-        ctx.beginPath();
-        let first = true;
-        for (let i = 0; i <= points; i++) {
-            let t = (i / points) * Math.PI * 2;
-            let x = Math.sin(a * t + phaseRad + animTime * 0.2) * (width/3);
-            let y = Math.sin(b * t) * (height/3);
-            if (dynamicGlitch > 0.01) {
-                x += Math.sin(t * 37) * dynamicGlitch * 20;
-                y += Math.cos(t * 41) * dynamicGlitch * 20;
-                if (Math.random() < dynamicGlitch * 0.05) {
-                    x += (Math.random() - 0.5) * 15;
-                    y += (Math.random() - 0.5) * 15;
-                }
-            }
-            if (pix > 1) {
-                let step = pix * 2;
-                x = Math.round(x / step) * step;
-                y = Math.round(y / step) * step;
-            }
-            const screenX = centerX + x;
-            const screenY = centerY + y;
-            if (params.dotMode) {
-                ctx.fillRect(screenX, screenY, 2, 2);
-            } else {
-                if (first) { ctx.moveTo(screenX, screenY); first = false; }
-                else ctx.lineTo(screenX, screenY);
-            }
-        }
-        if (!params.dotMode) ctx.stroke();
-        
-        // Дополнительные объекты
-        extraObjects.forEach(obj => {
-            ctx.save();
-            ctx.strokeStyle = params.invert ? '#000' : '#fff';
-            ctx.fillStyle = params.invert ? '#000' : '#fff';
-            ctx.beginPath();
-            if (obj.type === 'circle') {
-                ctx.arc(obj.x, obj.y, obj.size/2, 0, 2*Math.PI);
-                ctx.stroke();
-            } else if (obj.type === 'rect') {
-                ctx.strokeRect(obj.x - obj.size/2, obj.y - obj.size/2, obj.size, obj.size);
-            } else if (obj.type === 'triangle') {
-                const h = obj.size * 0.866;
-                ctx.moveTo(obj.x, obj.y - obj.size/2);
-                ctx.lineTo(obj.x + obj.size/2, obj.y + h/2);
-                ctx.lineTo(obj.x - obj.size/2, obj.y + h/2);
-                ctx.closePath();
-                ctx.stroke();
-            }
-            ctx.restore();
-        });
-    }
-
+    // ---------- アニメーション ----------
     function animate() {
         updateAudioMeters();
-        drawLissajous();
+        drawShape();
         animTime += 0.02;
         requestAnimationFrame(animate);
     }
     animate();
 
-    // ---------- 6. Перетаскивание окон ----------
+    // ---------- ウィンドウドラッグ ----------
     function makeDraggable(panel) {
         const header = panel.querySelector('.panel-header');
         if (!header) return;
-        let isDrag = false, offX, offY;
+        let isDrag=false, offX, offY;
         header.onmousedown = (e) => {
-            isDrag = true;
+            isDrag=true;
             offX = e.clientX - panel.offsetLeft;
             offY = e.clientY - panel.offsetTop;
             panel.style.zIndex = 1002;
-            document.body.style.userSelect = 'none';
+            document.body.style.userSelect='none';
             const onMove = (me) => {
                 if (!isDrag) return;
                 let left = me.clientX - offX;
                 let top = me.clientY - offY;
-                left = Math.min(Math.max(left, 0), window.innerWidth - panel.offsetWidth);
-                top = Math.min(Math.max(top, 0), window.innerHeight - panel.offsetHeight);
-                panel.style.left = left + 'px';
-                panel.style.top = top + 'px';
+                left = Math.min(Math.max(left,0), window.innerWidth - panel.offsetWidth);
+                top = Math.min(Math.max(top,0), window.innerHeight - panel.offsetHeight);
+                panel.style.left = left+'px';
+                panel.style.top = top+'px';
             };
             const onUp = () => {
-                isDrag = false;
-                document.body.style.userSelect = '';
+                isDrag=false;
+                document.body.style.userSelect='';
                 window.removeEventListener('mousemove', onMove);
                 window.removeEventListener('mouseup', onUp);
             };
@@ -522,15 +563,13 @@
             e.preventDefault();
         };
     }
-    document.querySelectorAll('.panel').forEach(p => makeDraggable(p));
-    
-    // Адаптация размера canvas
+    document.querySelectorAll('.panel').forEach(p=>makeDraggable(p));
+
     window.addEventListener('resize', () => {
         const container = document.getElementById('mainCanvasContainer');
         const w = container.clientWidth * 0.8;
         canvas.style.width = w + 'px';
-        canvas.width = 800;
-        canvas.height = 600;
+        canvas.width = 800; canvas.height = 600;
         width = canvas.width; height = canvas.height;
         centerX = width/2; centerY = height/2;
     });
