@@ -15,6 +15,7 @@
             overflow: hidden;
             font-family: 'Courier New', 'MS Gothic', monospace;
         }
+        /* Панели — перетаскиваемые */
         .panel {
             position: absolute;
             background: #000;
@@ -23,7 +24,6 @@
             min-width: 260px;
             z-index: 1000;
             box-shadow: 6px 6px 0 rgba(255,255,255,0.2);
-            image-rendering: pixelated; /* вместо crisp-edges */
         }
         .panel-header {
             background: #fff;
@@ -95,7 +95,6 @@
             border: 1px solid #fff;
             display: block;
             margin-top: 6px;
-            image-rendering: pixelated;
         }
         .meter {
             background: #000;
@@ -148,7 +147,7 @@
     <canvas id="threeCanvas" style="width:100%; height:100%; display:block;"></canvas>
 </div>
 
-<!-- パネル 1 -->
+<!-- Панели -->
 <div id="panelLiss" class="panel" style="top:15px; left:15px; width:280px;">
     <div class="panel-header">◈ リサジュー / グリッチ</div>
     <div class="panel-content">
@@ -163,7 +162,6 @@
     </div>
 </div>
 
-<!-- パネル 2 エフェクト -->
 <div id="panelFx" class="panel" style="top:15px; left:320px; width:290px;">
     <div class="panel-header">⚡ 音響改造</div>
     <div class="panel-content">
@@ -178,7 +176,6 @@
     </div>
 </div>
 
-<!-- パネル 3 オーディオ -->
 <div id="panelAudio" class="panel" style="top:15px; right:15px; width:310px;">
     <div class="panel-header">🎙️ 音声入力 ｜ 計測</div>
     <div class="panel-content">
@@ -191,7 +188,6 @@
     </div>
 </div>
 
-<!-- パネル 4 オブジェクト生成 -->
 <div id="panelObjects" class="panel" style="bottom:15px; left:15px; width:290px;">
     <div class="panel-header">▣ 造形物 ｜ 生成・調整</div>
     <div class="panel-content">
@@ -219,7 +215,7 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // --- 3D セットアップ ---
+    // --- 3D setup ---
     const canvasElem = document.getElementById('threeCanvas');
     const renderer = new THREE.WebGLRenderer({ canvas: canvasElem, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -232,7 +228,7 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // 補助要素
+    // helpers
     const grid = new THREE.GridHelper(7, 24, 0x444444, 0x222222);
     grid.position.y = -1.6;
     scene.add(grid);
@@ -240,7 +236,6 @@
     axes.material.transparent = true;
     axes.material.opacity = 0.25;
     scene.add(axes);
-    // 星フィールド
     const starGeo = new THREE.BufferGeometry();
     const starPos = [];
     for (let i = 0; i < 1500; i++) {
@@ -252,7 +247,7 @@
     const starField = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.08 }));
     scene.add(starField);
 
-    // --- メインライン (リサジュー曲線) ---
+    // main Lissajous curve
     const POINTS = 3800;
     let lineGeometry = new THREE.BufferGeometry();
     let linePositions = new Float32Array(POINTS * 3);
@@ -262,7 +257,7 @@
     scene.add(mainLine);
     let pointCloud = null;
 
-    // --- パラメータ ---
+    // parameters
     let params = {
         freqX: 3.0, freqY: 4.0, freqZ: 2.2,
         phaseXY: 90, phaseZ: 45,
@@ -274,7 +269,7 @@
         objSize: 0.6
     };
 
-    // --- ノブ制御 (動作保証) ---
+    // knob helper
     function makeKnob(domId, minVal, maxVal, initVal, callback, isInt = false, suffix = '') {
         const knobDiv = document.getElementById(domId);
         if (!knobDiv) return;
@@ -325,7 +320,7 @@
     makeKnob('knobScale', 0.5, 1.8, 1.0, v => { params.globalScale = v; });
     makeKnob('knobObjSize', 0.3, 1.5, 0.6, v => { params.objSize = v; });
 
-    // 点/線切り替え
+    // dot/line toggle
     document.getElementById('dotModeBtn').onclick = () => {
         params.dotMode = !params.dotMode;
         if (params.dotMode) {
@@ -349,7 +344,7 @@
         starField.material.color.setHex(params.invert ? 0x444444 : 0xffffff);
     };
 
-    // --- オーディオエフェクトチェイン (完全動作) ---
+    // audio processing
     let audioCtx = null, sourceNode = null, analyser = null;
     let eqLow, eqMid, eqHigh, compressor, waveshaper, reverbNode, reverbDryWet, masterGain;
     let isAudioActive = false;
@@ -462,7 +457,7 @@
         const bassMeter = Math.min(1.0, bassEnergy * 1.5);
         document.getElementById('bassFill').style.width = (bassMeter * 100) + '%';
         document.getElementById('bassText').innerText = Math.floor(bassMeter * 100);
-        // 波形描画
+        // waveform
         const wCanvas = document.getElementById('waveCanvas');
         const wCtx = wCanvas.getContext('2d');
         wCtx.fillStyle = '#000'; wCtx.fillRect(0, 0, wCanvas.width, wCanvas.height);
@@ -476,6 +471,7 @@
             }
             wCtx.stroke();
         }
+        // spectrum
         const sCanvas = document.getElementById('specCanvas');
         const sCtx = sCanvas.getContext('2d');
         sCtx.fillStyle = '#000'; sCtx.fillRect(0, 0, sCanvas.width, sCanvas.height);
@@ -489,7 +485,7 @@
         }
     }
 
-    // --- 動的オブジェクト (追加・削除) ---
+    // dynamic objects
     let dynamicObjects = [];
     function addVisualObject() {
         const type = document.getElementById('objTypeSelect').value;
@@ -516,7 +512,7 @@
         document.getElementById('objCount').innerText = `生成数: 0`;
     };
 
-    // --- リサジュー座標更新 + オーディオ連動 ---
+    // Lissajous update
     let animTime = 0;
     function updateLissajous() {
         const a = params.freqX, b = params.freqY, c = params.freqZ;
@@ -590,7 +586,7 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // パネルドラッグ
+    // drag panels
     function makeDraggable(panel) {
         const header = panel.querySelector('.panel-header');
         if (!header) return;
@@ -622,8 +618,7 @@
         };
     }
     document.querySelectorAll('.panel').forEach(p => makeDraggable(p));
-
-    console.log('システム起動完了');
+    console.log('Ready');
 </script>
 </body>
 </html>
