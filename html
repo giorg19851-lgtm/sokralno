@@ -1,226 +1,586 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-<title>Lissajous Figure Generator</title>
-<style>
-  body {
-    font-family: sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin: 0;
-    padding: 20px;
-    background-color: #f0f0f0;
-  }
-  h1 {
-    margin-top: 0;
-  }
-  #controls {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 10px 5px;
-    align-items: center;
-    margin-bottom: 20px;
-    padding: 15px;
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  }
-  label {
-    justify-self: end;
-  }
-  input[type="range"] {
-    width: 150px;
-  }
-  input[type="number"] {
-    width: 60px;
-  }
-  canvas {
-    border: 1px solid black;
-    background-color: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  }
-  .control-group {
-    display: contents; /* Allows grid layout to apply to children */
-  }
-  .control-group label {
-    margin-right: 5px;
-  }
-  .control-group input {
-    margin-right: 10px;
-  }
-  .value-display {
-    min-width: 30px;
-    text-align: left;
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Lissajous Music Visualizer | Интерактивная аудио-визуализация</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', 'Poppins', 'Inter', system-ui, -apple-system, sans-serif;
+            color: #f0f0f0;
+        }
+        /* Боковая панель (осциллограф + спектр + контролы) */
+        .sidebar {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            background: rgba(15, 25, 45, 0.85);
+            backdrop-filter: blur(12px);
+            border-radius: 24px;
+            padding: 18px 16px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.2);
+            z-index: 100;
+            pointer-events: auto;
+            font-size: 13px;
+            transition: 0.2s;
+        }
+        .sidebar h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+            color: #ffaa88;
+        }
+        .waveform-container, .spectrum-container {
+            background: #0a0c18;
+            border-radius: 16px;
+            padding: 8px;
+            margin-bottom: 18px;
+            border: 1px solid #334;
+        }
+        canvas.wave-canvas, canvas.spec-canvas {
+            width: 100%;
+            height: 110px;
+            background: #03050b;
+            display: block;
+            border-radius: 8px;
+        }
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+            align-items: center;
+        }
+        button {
+            background: #2c3e66;
+            border: none;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+            font-size: 0.8rem;
+        }
+        button:hover {
+            background: #e94560;
+            transform: scale(1.02);
+        }
+        .param-slider {
+            flex: 1;
+        }
+        input[type="range"] {
+            width: 100%;
+            background: #2a3f5e;
+            height: 3px;
+            border-radius: 3px;
+        }
+        .param-row {
+            margin-bottom: 12px;
+        }
+        .param-row label {
+            display: flex;
+            justify-content: space-between;
+        }
+        .status-text {
+            font-size: 11px;
+            color: #ccc;
+            margin-top: 8px;
+            text-align: center;
+        }
+        .record-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .badge {
+            background: #e94560;
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        hr {
+            border-color: #334;
+            margin: 12px 0;
+        }
+        a {
+            color: #ffaa88;
+        }
+        @media (max-width: 700px) {
+            .sidebar { width: 260px; top: 10px; right: 10px; padding: 12px; }
+            canvas.wave-canvas, canvas.spec-canvas { height: 80px; }
+        }
+    </style>
 </head>
 <body>
 
-<h1>Lissajous Figure Generator</h1>
+<div class="sidebar">
+    <h3>🌀 3D Lissajous + Audio</h3>
+    <div class="waveform-container">
+        <canvas id="waveCanvas" class="wave-canvas" width="512" height="110" style="width:100%; height:110px"></canvas>
+        <div style="font-size:10px; margin-top:4px;">🎵 Осциллограмма (таймдомен)</div>
+    </div>
+    <div class="spectrum-container">
+        <canvas id="spectrumCanvas" class="spec-canvas" width="512" height="110" style="width:100%; height:110px"></canvas>
+        <div style="font-size:10px; margin-top:4px;">📊 Частотный спектр</div>
+    </div>
 
-<div id="controls">
-  <div class="control-group">
-    <label for="aFreq">Frequency A (ω<sub>a</sub>):</label>
-    <input type="range" id="aFreq" name="aFreq" min="1" max="10" value="3" step="0.1">
-    <span id="aFreqVal" class="value-display">3</span>
-  </div>
+    <div class="control-group">
+        <button id="micBtn">🎤 МИКРОФОН</button>
+        <button id="uploadBtn">📁 ЗАГРУЗИТЬ MP3/WAV</button>
+    </div>
+    <div class="control-group">
+        <label style="font-size:12px;">🎛️ Влияние музыки:</label>
+        <button id="resetParamsBtn">⟳ Сброс формы</button>
+    </div>
 
-  <div class="control-group">
-    <label for="bFreq">Frequency B (ω<sub>b</sub>):</label>
-    <input type="range" id="bFreq" name="bFreq" min="1" max="10" value="2" step="0.1">
-    <span id="bFreqVal" class="value-display">2</span>
-  </div>
+    <div class="param-row">
+        <label>⚡ Частота X (a) <span id="aVal">3.0</span></label>
+        <input type="range" id="freqA" min="0.5" max="8" step="0.02" value="3.0">
+    </div>
+    <div class="param-row">
+        <label>🌀 Частота Y (b) <span id="bVal">4.0</span></label>
+        <input type="range" id="freqB" min="0.5" max="8" step="0.02" value="4.0">
+    </div>
+    <div class="param-row">
+        <label>📐 Фаза (δ) <span id="phaseVal">90</span>°</label>
+        <input type="range" id="phaseDeg" min="0" max="360" step="1" value="90">
+    </div>
+    <div class="param-row">
+        <label>🎨 Чувствительность к громкости (Color/Speed)</label>
+        <input type="range" id="volSens" min="0" max="1.5" step="0.01" value="0.8">
+    </div>
 
-  <div class="control-group">
-    <label for="phase">Phase (δ):</label>
-    <input type="range" id="phase" name="phase" min="0" max="360" value="90" step="1">
-    <span id="phaseVal" class="value-display">90</span>°
-  </div>
-
-  <div class="control-group">
-    <label for="amplitudeX">Amplitude X (A):</label>
-    <input type="range" id="amplitudeX" name="amplitudeX" min="50" max="200" value="150" step="1">
-    <span id="amplitudeXVal" class="value-display">150</span>
-  </div>
-
-  <div class="control-group">
-    <label for="amplitudeY">Amplitude Y (B):</label>
-    <input type="range" id="amplitudeY" name="amplitudeY" min="50" max="200" value="150" step="1">
-    <span id="amplitudeYVal" class="value-display">150</span>
-  </div>
-
-  <div class="control-group">
-    <label for="speed">Animation Speed:</label>
-    <input type="range" id="speed" name="speed" min="0.1" max="2" value="0.5" step="0.1">
-    <span id="speedVal" class="value-display">0.5</span>
-  </div>
-
-  <div class="control-group">
-    <label for="lineWidth">Line Width:</label>
-    <input type="range" id="lineWidth" name="lineWidth" min="1" max="10" value="2" step="0.5">
-    <span id="lineWidthVal" class="value-display">2</span>
-  </div>
-
-   <div class="control-group">
-    <label for="lineColor">Line Color:</label>
-    <input type="color" id="lineColor" name="lineColor" value="#FF0000">
-    <span id="lineColorVal" class="value-display"></span>
-  </div>
+    <div class="record-buttons">
+        <button id="startRecordBtn">🔴 ЗАПИСЬ ВИДЕО (3D)</button>
+        <button id="stopRecordBtn" disabled>⏹️ СТОП</button>
+    </div>
+    <button id="exportParamsBtn">📎 Экспорт параметров (JSON)</button>
+    <div class="status-text" id="audioStatus">⏳ Выберите источник звука</div>
 </div>
 
-<canvas id="lissajousCanvas" width="400" height="400"></canvas>
+<!-- основной 3D контейнер -->
+<div id="canvas3dContainer" style="position: fixed; top:0; left:0; width:100%; height:100%; z-index:0;">
+    <canvas id="threeCanvas" style="width:100%; height:100%; display:block;"></canvas>
+</div>
 
-<script>
-  const canvas = document.getElementById('lissajousCanvas');
-  const ctx = canvas.getContext('2d');
-  const width = canvas.width;
-  const height = canvas.height;
-  const centerX = width / 2;
-  const centerY = height / 2;
-
-  let t = 0; // Time parameter for animation
-
-  // --- Control Elements ---
-  const aFreqSlider = document.getElementById('aFreq');
-  const bFreqSlider = document.getElementById('bFreq');
-  const phaseSlider = document.getElementById('phase');
-  const amplitudeXSlider = document.getElementById('amplitudeX');
-  const amplitudeYSlider = document.getElementById('amplitudeY');
-  const speedSlider = document.getElementById('speed');
-  const lineWidthSlider = document.getElementById('lineWidth');
-  const lineColorPicker = document.getElementById('lineColor');
-
-  // --- Value Displays ---
-  const aFreqVal = document.getElementById('aFreqVal');
-  const bFreqVal = document.getElementById('bFreqVal');
-  const phaseVal = document.getElementById('phaseVal');
-  const amplitudeXVal = document.getElementById('amplitudeXVal');
-  const amplitudeYVal = document.getElementById('amplitudeYVal');
-  const speedVal = document.getElementById('speedVal');
-  const lineWidthVal = document.getElementById('lineWidthVal');
-  const lineColorVal = document.getElementById('lineColorVal'); // Not strictly needed for color picker but good for consistency
-
-  // --- Initial Values ---
-  let a = parseFloat(aFreqSlider.value); // Frequency for X
-  let b = parseFloat(bFreqSlider.value); // Frequency for Y
-  let phase = parseFloat(phaseSlider.value) * Math.PI / 180; // Phase difference in radians
-  let amplitudeX = parseFloat(amplitudeXSlider.value);
-  let amplitudeY = parseFloat(amplitudeYSlider.value);
-  let animationSpeed = parseFloat(speedSlider.value);
-  let currentLineWidth = parseFloat(lineWidthSlider.value);
-  let currentLineColor = lineColorPicker.value;
-
-  // --- Update Functions for Controls ---
-  function updateValues() {
-    a = parseFloat(aFreqSlider.value);
-    b = parseFloat(bFreqSlider.value);
-    phase = parseFloat(phaseSlider.value) * Math.PI / 180;
-    amplitudeX = parseFloat(amplitudeXSlider.value);
-    amplitudeY = parseFloat(amplitudeYSlider.value);
-    animationSpeed = parseFloat(speedSlider.value);
-    currentLineWidth = parseFloat(lineWidthSlider.value);
-    currentLineColor = lineColorPicker.value;
-
-    aFreqVal.textContent = a.toFixed(1);
-    bFreqVal.textContent = b.toFixed(1);
-    phaseVal.textContent = phaseSlider.value; // Display in degrees
-    amplitudeXVal.textContent = amplitudeX.toFixed(0);
-    amplitudeYVal.textContent = amplitudeY.toFixed(0);
-    speedVal.textContent = animationSpeed.toFixed(1);
-    lineWidthVal.textContent = currentLineWidth.toFixed(1);
-    // lineColorVal.textContent = currentLineColor; // Could display hex if desired
-    t = 0; // Reset time on parameter change for a cleaner visual update
-  }
-
-  // --- Event Listeners for Controls ---
-  aFreqSlider.addEventListener('input', updateValues);
-  bFreqSlider.addEventListener('input', updateValues);
-  phaseSlider.addEventListener('input', updateValues);
-  amplitudeXSlider.addEventListener('input', updateValues);
-  amplitudeYSlider.addEventListener('input', updateValues);
-  speedSlider.addEventListener('input', updateValues);
-  lineWidthSlider.addEventListener('input', updateValues);
-  lineColorPicker.addEventListener('input', updateValues);
-
-
-  function drawLissajous() {
-    ctx.clearRect(0, 0, width, height); // Clear canvas
-    ctx.beginPath();
-    ctx.lineWidth = currentLineWidth;
-    ctx.strokeStyle = currentLineColor;
-
-    const pointsToDraw = 500; // Number of points to define the curve
-    const timeIncrement = (2 * Math.PI) / pointsToDraw;
-
-    for (let i = 0; i <= pointsToDraw; i++) {
-      const currentTime = i * timeIncrement;
-      // Parametric equations for Lissajous curve:
-      // x(t) = A * sin(a*t + δ)
-      // y(t) = B * sin(b*t)
-      // We add 't' (global animation time) to one of the frequencies to make it animate
-      const x = centerX + amplitudeX * Math.sin(a * currentTime + phase + t * animationSpeed);
-      const y = centerY + amplitudeY * Math.sin(b * currentTime + t * animationSpeed);
-
-      if (i === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+        }
     }
-    ctx.stroke();
-  }
-
-  function animate() {
-    drawLissajous();
-    t += 0.01; // Increment time for animation effect. The speed is controlled by animationSpeed inside drawLissajous.
-    requestAnimationFrame(animate); // Loop the animation
-  }
-
-  // Initial setup
-  updateValues(); // Set initial display values
-  animate();    // Start the animation
 </script>
 
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // --- ИНИЦИАЛИЗАЦИЯ 3D СЦЕНЫ ---
+    const container = document.getElementById('canvas3dContainer');
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('threeCanvas'), alpha: false, preserveDrawingBuffer: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x050b1a, 1);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x050b1a);
+    scene.fog = new THREE.FogExp2(0x050b1a, 0.006);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(2.5, 1.8, 4);
+    camera.lookAt(0, 0, 0);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.autoRotate = false;
+    controls.enableZoom = true;
+    controls.zoomSpeed = 1.0;
+    
+    // --- Вспомогательные объекты: оси, сетка, звездный фон (частицы)
+    const axesHelper = new THREE.AxesHelper(2.2);
+    axesHelper.material.transparent = true;
+    axesHelper.material.opacity = 0.25;
+    scene.add(axesHelper);
+    const gridHelper = new THREE.GridHelper(6, 32, 0x66aaff, 0x335588);
+    gridHelper.position.y = -1.2;
+    scene.add(gridHelper);
+    // звезды
+    const starGeometry = new THREE.BufferGeometry();
+    const starCount = 800;
+    const starPos = [];
+    for (let i = 0; i < starCount; i++) {
+        starPos.push((Math.random() - 0.5) * 300);
+        starPos.push((Math.random() - 0.5) * 150);
+        starPos.push((Math.random() - 0.5) * 100 - 50);
+    }
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(starPos), 3));
+    const starMaterial = new THREE.PointsMaterial({ color: 0x88aaff, size: 0.12, transparent: true, opacity: 0.6 });
+    const stars = new THREE.Points(starGeometry, starMaterial);
+    scene.add(stars);
+    
+    // --- Линия Лиссажу (3D кривая) ---
+    const pointsCount3D = 2400;   // количество точек для гладкой кривой
+    let lineGeometry = new THREE.BufferGeometry();
+    let positions = new Float32Array(pointsCount3D * 3);
+    lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff4488, linewidth: 2, linecap: 'round', linejoin: 'round' });
+    const lissajousLine = new THREE.Line(lineGeometry, lineMaterial);
+    scene.add(lissajousLine);
+    
+    // Дополнительный свечение - маленькая сфера в центре
+    const centerGlow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.045, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xff66aa, emissive: 0x441133 })
+    );
+    scene.add(centerGlow);
+    
+    // --- ПАРАМЕТРЫ ФИГУРЫ ---
+    let params = {
+        freqA: 3.0,
+        freqB: 4.0,
+        phaseDeg: 90,
+        ampX: 1.2,
+        ampY: 1.2,
+        ampZ: 0.9,
+        volSens: 0.8
+    };
+    
+    // DOM элементы управления
+    const freqASlider = document.getElementById('freqA');
+    const freqBSlider = document.getElementById('freqB');
+    const phaseSlider = document.getElementById('phaseDeg');
+    const volSensSlider = document.getElementById('volSens');
+    const aValSpan = document.getElementById('aVal');
+    const bValSpan = document.getElementById('bVal');
+    const phaseValSpan = document.getElementById('phaseVal');
+    
+    freqASlider.addEventListener('input', () => { params.freqA = parseFloat(freqASlider.value); aValSpan.innerText = params.freqA.toFixed(2); });
+    freqBSlider.addEventListener('input', () => { params.freqB = parseFloat(freqBSlider.value); bValSpan.innerText = params.freqB.toFixed(2); });
+    phaseSlider.addEventListener('input', () => { params.phaseDeg = parseFloat(phaseSlider.value); phaseValSpan.innerText = params.phaseDeg; });
+    volSensSlider.addEventListener('input', () => { params.volSens = parseFloat(volSensSlider.value); });
+    
+    // --- АУДИО АНАЛИЗ (Web Audio API) ---
+    let audioContext = null;
+    let analyser = null;
+    let sourceNode = null;
+    let mediaStream = null;
+    let audioFileBuffer = null;
+    let isAudioActive = false;
+    let animationFrameId = null;
+    
+    const waveCanvas = document.getElementById('waveCanvas');
+    const waveCtx = waveCanvas.getContext('2d');
+    const specCanvas = document.getElementById('spectrumCanvas');
+    const specCtx = specCanvas.getContext('2d');
+    const audioStatusSpan = document.getElementById('audioStatus');
+    
+    function initAudioContext() {
+        if (audioContext && audioContext.state !== 'closed') return audioContext;
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.3;
+        return audioContext;
+    }
+    
+    function closeAudioStream() {
+        if (mediaStream) {
+            mediaStream.getTracks().forEach(track => track.stop());
+            mediaStream = null;
+        }
+        if (sourceNode) {
+            try { sourceNode.disconnect(); } catch(e) {}
+            sourceNode = null;
+        }
+        if (audioContext) {
+            audioContext.close().catch(e=>console.warn);
+            audioContext = null;
+            analyser = null;
+        }
+        isAudioActive = false;
+        audioStatusSpan.innerText = "❌ Аудио выключен. Выберите источник.";
+    }
+    
+    // Подключение микрофона
+    async function enableMicrophone() {
+        closeAudioStream();
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const ctx = initAudioContext();
+            mediaStream = stream;
+            sourceNode = ctx.createMediaStreamSource(stream);
+            sourceNode.connect(analyser);
+            await ctx.resume();
+            isAudioActive = true;
+            audioStatusSpan.innerHTML = "🎙️ Микрофон активен • Анализ звука";
+        } catch (err) {
+            console.error(err);
+            audioStatusSpan.innerText = "⚠️ Ошибка доступа к микрофону";
+            isAudioActive = false;
+        }
+    }
+    
+    // Загрузка аудиофайла
+    function setupFileUpload() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'audio/*';
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            closeAudioStream();
+            const ctx = initAudioContext();
+            const arrayBuffer = await file.arrayBuffer();
+            const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+            // создаем буферный источник
+            const bufferSource = ctx.createBufferSource();
+            bufferSource.buffer = audioBuffer;
+            bufferSource.loop = true;
+            bufferSource.connect(analyser);
+            bufferSource.connect(ctx.destination); // чтобы слышать
+            bufferSource.start(0);
+            sourceNode = bufferSource;
+            await ctx.resume();
+            isAudioActive = true;
+            audioStatusSpan.innerHTML = `🎵 Играет: ${file.name} (loop)`;
+        };
+        input.click();
+    }
+    
+    document.getElementById('micBtn').addEventListener('click', enableMicrophone);
+    document.getElementById('uploadBtn').addEventListener('click', setupFileUpload);
+    document.getElementById('resetParamsBtn').addEventListener('click', () => {
+        freqASlider.value = '3'; params.freqA = 3; aValSpan.innerText = '3';
+        freqBSlider.value = '4'; params.freqB = 4; bValSpan.innerText = '4';
+        phaseSlider.value = '90'; params.phaseDeg = 90; phaseValSpan.innerText = '90';
+        volSensSlider.value = '0.8'; params.volSens = 0.8;
+    });
+    
+    // --- ПОЛУЧЕНИЕ АУДИО ДАННЫХ для визуализации ---
+    let frequencyData = new Uint8Array(0);
+    let timeData = new Uint8Array(0);
+    let avgVolume = 0;
+    let dominantFreq = 0; // условный индекс
+    
+    function updateAudioData() {
+        if (!isAudioActive || !analyser) {
+            // заглушка: плавное затухание
+            avgVolume *= 0.98;
+            dominantFreq = 0;
+            return;
+        }
+        if (frequencyData.length !== analyser.frequencyBinCount) {
+            frequencyData = new Uint8Array(analyser.frequencyBinCount);
+            timeData = new Uint8Array(analyser.fftSize);
+        }
+        analyser.getByteFrequencyData(frequencyData);
+        analyser.getByteTimeDomainData(timeData);
+        let sum = 0;
+        for (let i = 0; i < frequencyData.length; i++) sum += frequencyData[i];
+        avgVolume = sum / frequencyData.length / 255; // диапазон 0..1
+        // поиск доминантной частоты (примерно)
+        let maxIdx = 0;
+        for (let i = 1; i < frequencyData.length; i++) {
+            if (frequencyData[i] > frequencyData[maxIdx]) maxIdx = i;
+        }
+        dominantFreq = maxIdx / frequencyData.length; // 0..1
+    }
+    
+    // Отрисовка осциллографа (waveform)
+    function drawWaveform() {
+        if (!waveCtx) return;
+        const w = waveCanvas.width, h = waveCanvas.height;
+        waveCtx.fillStyle = '#03050b';
+        waveCtx.fillRect(0, 0, w, h);
+        if (!isAudioActive || !timeData.length) {
+            waveCtx.strokeStyle = '#6688aa';
+            waveCtx.beginPath();
+            waveCtx.moveTo(0, h/2);
+            waveCtx.lineTo(w, h/2);
+            waveCtx.stroke();
+            return;
+        }
+        const step = timeData.length / w;
+        waveCtx.beginPath();
+        waveCtx.strokeStyle = '#f9c74f';
+        waveCtx.lineWidth = 1.8;
+        for (let x = 0; x < w; x++) {
+            const idx = Math.floor(x * step);
+            const val = (timeData[idx] - 128) / 128; // -1..1
+            const y = h/2 + val * (h/2 - 4);
+            if (x === 0) waveCtx.moveTo(x, y);
+            else waveCtx.lineTo(x, y);
+        }
+        waveCtx.stroke();
+    }
+    
+    // Спектрограмма (столбцы)
+    function drawSpectrum() {
+        if (!specCtx) return;
+        const w = specCanvas.width, h = specCanvas.height;
+        specCtx.fillStyle = '#03050b';
+        specCtx.fillRect(0, 0, w, h);
+        if (!isAudioActive || !frequencyData.length) {
+            specCtx.fillStyle = '#335588';
+            specCtx.fillRect(0, h-8, w, 8);
+            return;
+        }
+        const barWidth = w / frequencyData.length;
+        for (let i = 0; i < frequencyData.length; i++) {
+            const val = frequencyData[i] / 255;
+            const barH = val * h;
+            const hue = 200 + (i / frequencyData.length) * 160;
+            specCtx.fillStyle = `hsl(${hue}, 80%, 55%)`;
+            specCtx.fillRect(i * barWidth, h - barH, barWidth - 1, barH);
+        }
+    }
+    
+    // --- ОБНОВЛЕНИЕ 3D ЛИССАЖУ с привязкой к громкости и доминантным частотам ---
+    let timeAnim = 0;
+    function updateLissajousGeometry() {
+        const a_base = params.freqA;
+        const b_base = params.freqB;
+        const phaseRad = params.phaseDeg * Math.PI / 180;
+        const volFactor = Math.min(1.2, avgVolume * 1.6) * params.volSens;
+        // динамическая модуляция: частота и амплитуда меняются от громкости/частоты
+        const modFreqA = a_base + (dominantFreq * 1.2 - 0.4) * volFactor * 0.6;
+        const modFreqB = b_base + (dominantFreq * 0.8) * volFactor * 0.5;
+        const ampMod = 1.0 + volFactor * 0.7;
+        const ampZmod = 0.9 + volFactor * 0.4;
+        const A = params.ampX * ampMod;
+        const B = params.ampY * ampMod;
+        const C = params.ampZ * ampZmod;
+        
+        const positions = lissajousLine.geometry.attributes.position.array;
+        for (let i = 0; i <= pointsCount3D; i++) {
+            const t = (i / pointsCount3D) * Math.PI * 2;
+            // классика Лиссажу с дополнительной 3-й координатой
+            let x = A * Math.sin(modFreqA * t + phaseRad);
+            let y = B * Math.sin(modFreqB * t);
+            let z = C * Math.sin((modFreqA + modFreqB) * t * 0.6 + phaseRad * 0.5);
+            // легкое искажение от громкости
+            x += (Math.sin(t * 2) * volFactor * 0.08);
+            y += (Math.cos(t * 1.7) * volFactor * 0.08);
+            positions[i*3] = x;
+            positions[i*3+1] = y;
+            positions[i*3+2] = z;
+        }
+        lissajousLine.geometry.attributes.position.needsUpdate = true;
+        // динамический цвет линии в зависимости от громкости и частоты
+        const hueColor = (180 + (avgVolume * 180) + dominantFreq * 140) % 360;
+        const sat = 70 + avgVolume * 30;
+        const light = 55 + avgVolume * 25;
+        lineMaterial.color.setHSL(hueColor / 360, sat/100, light/100);
+        // свечение центра
+        const scaleGlow = 0.045 + avgVolume * 0.08;
+        centerGlow.scale.set(scaleGlow, scaleGlow, scaleGlow);
+        centerGlow.material.color.setHSL(hueColor / 360, 0.9, 0.6);
+    }
+    
+    // --- ЗАПИСЬ ВИДЕО (только 3D canvas) ---
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    const startBtn = document.getElementById('startRecordBtn');
+    const stopBtn = document.getElementById('stopRecordBtn');
+    
+    async function startRecording() {
+        const stream3d = renderer.domElement.captureStream(30);
+        if (!stream3d) { alert('Не удалось захватить поток canvas'); return; }
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(stream3d, { mimeType: 'video/webm' });
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) recordedChunks.push(event.data);
+        };
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `lissajous_${Date.now()}.webm`;
+            a.click();
+            URL.revokeObjectURL(url);
+            audioStatusSpan.innerHTML += " ✅ Видео сохранено!";
+        };
+        mediaRecorder.start(100);
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        audioStatusSpan.innerHTML += " 🔴 Запись видео...";
+    }
+    
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+        }
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+    }
+    startBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+    
+    // Экспорт параметров
+    document.getElementById('exportParamsBtn').addEventListener('click', () => {
+        const exportData = {
+            timestamp: new Date().toISOString(),
+            frequencies: { a: params.freqA, b: params.freqB, phase_deg: params.phaseDeg },
+            audioSensitivity: params.volSens,
+            avgVolume: avgVolume,
+            dominantFreqRatio: dominantFreq,
+            colorHueHint: lineMaterial.color.getHSL({}).h
+        };
+        const jsonStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `lissajous_params_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        audioStatusSpan.innerHTML = "📁 Параметры экспортированы";
+        setTimeout(() => { if(isAudioActive) audioStatusSpan.innerHTML = "🎶 Визуализация активна"; }, 1500);
+    });
+    
+    // --- АНИМАЦИОННЫЙ ЦИКЛ ---
+    let lastTimestamp = 0;
+    function animate() {
+        updateAudioData();
+        drawWaveform();
+        drawSpectrum();
+        updateLissajousGeometry();
+        
+        // Вращение звездного поля
+        stars.rotation.y += 0.0005;
+        stars.rotation.x += 0.0003;
+        
+        // автоматический поворот камеры? но оставим управление пользователю, но можно слегка добавить эффект
+        controls.update(); 
+        
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+    }
+    
+    // Адаптация размера окна
+    window.addEventListener('resize', onWindowResize, false);
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        // 2D canvas размеры фиксированы в CSS, перерисовать не требуется
+    }
+    
+    // инициализация геометрии пустыми точками
+    updateLissajousGeometry();
+    animate();
+    
+    // красивое сообщение о готовности
+    setTimeout(() => {
+        audioStatusSpan.innerHTML = "🎧 Готово! Нажмите 🎤 или загрузите трек";
+    }, 500);
+</script>
 </body>
 </html>
