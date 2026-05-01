@@ -3,777 +3,532 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>黒白マルチカーブ＋LFOモジュレーション</title>
+    <title>黒白・多層曲線＋LFO＋音響分析 (安定版)</title>
     <style>
-        * {
-            user-select: none;
-            box-sizing: border-box;
-        }
-        body {
-            margin: 0;
-            background: #000;
-            font-family: 'Courier New', monospace;
-            overflow: hidden;
-        }
+        * { user-select: none; box-sizing: border-box; }
+        body { margin: 0; background: #000; font-family: 'Courier New', monospace; overflow: hidden; }
         .panel {
             position: absolute;
             background: #000;
             border: 2px solid #fff;
             padding: 0;
-            min-width: 280px;
+            min-width: 260px;
             z-index: 1000;
             box-shadow: 4px 4px 0 rgba(255,255,255,0.2);
-            font-size: 11px;
         }
         .panel-header {
             background: #fff;
             color: #000;
             padding: 6px 10px;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 13px;
             cursor: move;
             border-bottom: 2px solid #000;
             text-transform: uppercase;
         }
         .panel-content {
-            padding: 10px;
+            padding: 10px 12px;
+            color: #ccc;
+            font-size: 11px;
+            max-height: 65vh;
+            overflow-y: auto;
         }
-        .slider-group {
-            margin-bottom: 12px;
-        }
-        .slider-group label {
+        .knob-row {
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            margin-bottom: 4px;
+            margin-bottom: 8px;
         }
-        input[type="range"] {
-            width: 100%;
-            background: #222;
-            height: 2px;
-            -webkit-appearance: none;
+        .knob {
+            width: 36px;
+            height: 36px;
+            background: #111;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            cursor: ew-resize;
+            position: relative;
         }
-        input[type="range"]:focus {
-            outline: none;
-        }
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 10px;
-            height: 16px;
+        .knob::after {
+            content: "";
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            width: 2px;
+            height: 14px;
             background: #fff;
-            border: 1px solid #000;
-            cursor: pointer;
-            border-radius: 0;
+            transform: translateX(-50%) rotate(calc( var(--val, 0) * 270deg ));
+            transform-origin: bottom center;
         }
-        .value-display {
-            font-family: monospace;
-            text-align: right;
-            min-width: 40px;
-            display: inline-block;
-        }
+        .knob-value { width: 45px; text-align: right; font-family: monospace; }
         button, select {
             background: #000;
             border: 1px solid #fff;
             color: #fff;
             padding: 4px 6px;
+            width: 100%;
             margin-top: 6px;
             cursor: pointer;
             font-family: monospace;
             font-size: 10px;
-            width: 100%;
         }
-        button:hover, select:hover {
-            background: #fff;
-            color: #000;
-        }
-        .curve-list {
-            max-height: 200px;
-            overflow-y: auto;
-            margin-bottom: 8px;
-            border: 1px solid #333;
-            padding: 4px;
-        }
-        .curve-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 4px;
-            border-bottom: 1px dotted #333;
-        }
-        .curve-item span {
-            cursor: pointer;
-        }
-        .curve-item button {
-            width: auto;
-            margin: 0;
-            padding: 2px 6px;
-            font-size: 9px;
-        }
-        .lfo-control {
-            background: #111;
-            padding: 6px;
-            margin-top: 8px;
-            border: 1px solid #333;
-        }
-        .flex-row {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        canvas.big-canvas {
-            display: block;
-            background: #0a0a0a;
-            border: 2px solid #fff;
-            margin: 0 auto;
-        }
-        .meter-bar {
-            height: 6px;
-            background: #222;
-            margin: 2px 0;
-        }
-        .meter-fill {
-            width: 0%;
-            height: 100%;
-            background: #fff;
-        }
-        .status {
-            font-size: 9px;
-            margin-top: 6px;
-            text-align: center;
-        }
+        button:hover { background: #fff; color: #000; }
+        canvas { display: block; background: #0a0a0a; border: 1px solid #fff; margin-top: 6px; }
+        .meter { border: 1px solid #fff; padding: 3px; margin: 6px 0; }
+        .meter-bar { height: 5px; background: #222; }
+        .meter-fill { width: 0%; height: 100%; background: #fff; }
+        .status { font-size: 8px; margin-top: 6px; text-align: center; }
+        .flex { display: flex; gap: 6px; margin: 6px 0; }
+        .small { font-size: 8px; }
+        .layer-card { border: 1px solid #444; padding: 5px; margin-bottom: 8px; background: #111; }
+        .layer-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        input[type="range"] { width: 100px; background: #333; }
+        .param-group { display: inline-block; width: 100%; }
     </style>
 </head>
 <body>
 
-<div style="position:fixed; top:0; left:0; width:100%; height:100%; display:flex; justify-content:center; align-items:center; z-index:0;">
-    <canvas id="mainCanvas" width="900" height="600" style="width:80%; height:auto; border:2px solid #fff; background:#000;"></canvas>
+<div id="canvasContainer" style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:0; display:flex; justify-content:center; align-items:center;">
+    <canvas id="mainCanvas" width="800" height="600" style="width:80%; height:auto; border:2px solid #fff; background:#000;"></canvas>
 </div>
 
-<!-- Левая панель: управление кривыми -->
-<div id="panelCurves" class="panel" style="top:20px; left:20px; width:320px;">
-    <div class="panel-header">◈ カーブ管理 / LFO</div>
+<div id="panelLayers" class="panel" style="top:15px; left:15px; width:320px;">
+    <div class="panel-header">◈ レイヤー管理</div>
+    <div class="panel-content" id="layersList"></div>
+    <button id="addLayerBtn" style="margin:0 10px 10px 10px; width:calc(100% - 20px);">➕ レイヤー追加</button>
+    <div class="flex" style="padding:0 10px 10px 10px;"><button id="drawModeBtn">✏️ 手描きモード</button><button id="clearDrawBtn">🗑️ 消去</button></div>
+</div>
+
+<div id="panelAudio" class="panel" style="top:15px; right:15px; width:300px;">
+    <div class="panel-header">🎙️ 音声・音色分析</div>
     <div class="panel-content">
-        <div class="curve-list" id="curveList"></div>
-        <div class="flex-row" style="gap:5px;">
-            <select id="newCurveType" style="width:60%;">
-                <option value="super">スーパーフォーミュラ</option>
-                <option value="lissajous">リサジュー</option>
-                <option value="spiral">スパイラル</option>
-                <option value="wave">波動曲線</option>
-            </select>
-            <button id="addCurveBtn" style="width:40%;">➕ 追加</button>
-        </div>
-        <div class="slider-group">
-            <label>全体グリッチ強度 <span id="globalGlitchVal" class="value-display">0.00</span></label>
-            <input type="range" id="globalGlitch" min="0" max="1.5" step="0.01" value="0">
-        </div>
-        <div class="slider-group">
-            <label>ピクセル分解 <span id="globalPixelVal" class="value-display">1</span></label>
-            <input type="range" id="globalPixel" min="1" max="12" step="1" value="1">
-        </div>
-        <div class="status" id="curveCountStatus">0 カーブ</div>
+        <div class="knob-row"><span>Low EQ</span><div class="knob" id="knobLow"></div><span id="lowVal" class="knob-value">0dB</span></div>
+        <div class="knob-row"><span>Mid EQ</span><div class="knob" id="knobMid"></div><span id="midVal" class="knob-value">0dB</span></div>
+        <div class="knob-row"><span>High EQ</span><div class="knob" id="knobHigh"></div><span id="highVal" class="knob-value">0dB</span></div>
+        <div class="knob-row"><span>コンプ閾値</span><div class="knob" id="knobThr"></div><span id="thrVal" class="knob-value">-20dB</span></div>
+        <div class="knob-row"><span>歪み</span><div class="knob" id="knobDist"></div><span id="distVal" class="knob-value">0.00</span></div>
+        <div class="knob-row"><span>リバーブ</span><div class="knob" id="knobRev"></div><span id="revVal" class="knob-value">0.00</span></div>
+        <canvas id="spectrogram" width="260" height="100" style="width:100%; height:100px;"></canvas>
+        <canvas id="spectrum" width="260" height="70" style="width:100%; height:70px;"></canvas>
+        <div class="meter"><div class="meter-bar"><div id="vuFill" class="meter-fill"></div></div><div id="vuText">0%</div></div>
+        <div class="meter"><div class="meter-bar"><div id="bassFill" class="meter-fill"></div></div><div class="small">低域</div></div>
+        <div class="meter"><div class="meter-bar"><div id="highFill" class="meter-fill"></div></div><div class="small">高域</div></div>
+        <div class="flex"><button id="micBtn">🎤 マイク</button><button id="fileBtn">📁 読込</button></div>
+        <div id="audioStatus" class="status">⚫ 停止</div>
+        <canvas id="envelope" width="260" height="70" style="width:100%; height:70px; margin-top:8px;"></canvas>
+        <div id="dominantFreq" class="status">ドミナント: — Hz</div>
     </div>
 </div>
 
-<!-- Панель 2: Аудиоэффекты -->
-<div id="panelFx" class="panel" style="top:20px; left:360px; width:280px;">
-    <div class="panel-header">⚡ 音響改造</div>
+<div id="panelLfo" class="panel" style="bottom:15px; right:15px; width:260px;">
+    <div class="panel-header">🌀 LFO 全体</div>
     <div class="panel-content">
-        <div class="slider-group"><label>Low EQ (dB) <span id="lowEQVal">0</span></label><input type="range" id="lowEQ" min="-12" max="12" step="0.5" value="0"></div>
-        <div class="slider-group"><label>Mid EQ (dB) <span id="midEQVal">0</span></label><input type="range" id="midEQ" min="-12" max="12" step="0.5" value="0"></div>
-        <div class="slider-group"><label>High EQ (dB) <span id="highEQVal">0</span></label><input type="range" id="highEQ" min="-12" max="12" step="0.5" value="0"></div>
-        <div class="slider-group"><label>Comp Threshold <span id="threshVal">-20</span></label><input type="range" id="compThresh" min="-40" max="0" step="1" value="-20"></div>
-        <div class="slider-group"><label>Distortion <span id="distVal">0.00</span></label><input type="range" id="distAmt" min="0" max="1.2" step="0.01" value="0"></div>
-        <div class="slider-group"><label>Reverb <span id="reverbVal">0.00</span></label><input type="range" id="reverbMix" min="0" max="1.0" step="0.01" value="0"></div>
-    </div>
-</div>
-
-<!-- Панель 3: Аудиовход + метры + спектр -->
-<div id="panelAudio" class="panel" style="top:20px; right:20px; width:320px;">
-    <div class="panel-header">🎙️ 音声入力 / スペクトル</div>
-    <div class="panel-content">
-        <canvas id="spectrogramCanvas" width="280" height="100" style="width:100%; height:100px; background:#000; border:1px solid #fff;"></canvas>
-        <canvas id="spectrumCanvas" width="280" height="80" style="width:100%; height:80px;"></canvas>
-        <div class="meter"><div class="meter-bar"><div id="vuFill" class="meter-fill"></div></div><span id="vuText">0%</span></div>
-        <div class="meter"><div class="meter-bar"><div id="bassFill" class="meter-fill"></div></div><span>低域</span></div>
-        <div class="meter"><div class="meter-bar"><div id="highFill" class="meter-fill"></div></div><span>高域</span></div>
-        <div class="flex-row"><button id="micBtn">🎤 マイク</button><button id="uploadBtn">📁 ファイル</button></div>
-        <div class="status" id="audioStatus">⚫ オーディオ停止</div>
-    </div>
-</div>
-
-<!-- Панель 4: Envelope + доминантная частота -->
-<div id="panelEnv" class="panel" style="bottom:20px; left:20px; width:300px;">
-    <div class="panel-header">▣ スペクトル包絡線</div>
-    <div class="panel-content">
-        <canvas id="envelopeCanvas" width="260" height="100" style="width:100%; height:100px;"></canvas>
-        <div class="status" id="dominantFreq">ドミナント: — Hz</div>
+        <div class="knob-row"><span>速度倍率</span><div class="knob" id="knobLfoSpeed"></div><span id="lfoSpeedVal" class="knob-value">0.5</span></div>
+        <div class="knob-row"><span>深さ倍率</span><div class="knob" id="knobLfoDepth"></div><span id="lfoDepthVal" class="knob-value">0.3</span></div>
+        <button id="resetLfoBtn">リセット LFO</button>
+        <div class="small">※レイヤーパラメータのLFOは各レイヤーで設定</div>
     </div>
 </div>
 
 <script>
-    (function() {
-        // ---------- Глобальные переменные ----------
-        const canvas = document.getElementById('mainCanvas');
-        const ctx = canvas.getContext('2d');
-        let width = 900, height = 600;
-        let centerX = width/2, centerY = height/2;
-        
-        // Список кривых
-        let curves = [];
-        let nextId = 1;
-        
-        // Глобальные параметры
-        let globalGlitch = 0;
-        let globalPixel = 1;
-        let invert = false;
-        
-        // Аудиоэффекты
-        let lowEQ = 0, midEQ = 0, highEQ = 0, compThresh = -20, distAmt = 0, reverbMix = 0;
-        
-        // LFO для каждого параметра каждой кривой – структура: для каждой кривой храним объект lfoParams
-        // Но для демонстрации сделаем LFO только для "параметра" (выбранного ползунка) – пока упростим.
-        // По вашей просьбе нужно много способов управления кривыми и LFO. Реализуем:
-        // - LFO для каждого параметра каждой кривой отдельно (выбор параметра, форма, частота, глубина).
-        // Это будет много кода, но я сделаю компактно и эффективно.
-        
-        // Для простоты в этой версии я добавлю возможность привязать LFO к любому параметру кривой через дополнительный интерфейс.
-        // Однако чтобы не перегружать, я создам для каждой кривой собственный LFO-генератор, который может управлять одним выбранным параметром.
-        
-        // Определим класс Curve
-        class Curve {
-            constructor(id, type, params) {
-                this.id = id;
-                this.type = type; // 'super', 'lissajous', 'spiral', 'wave'
-                this.params = params; // объект со специфическими параметрами
-                this.visible = true;
-                this.lfo = { enabled: false, target: 'param1', waveform: 'sine', freq: 0.5, depth: 0, phase: 0 };
+(function(){
+    // ----- キャンバス -----
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    let w = 800, h = 600;
+    let centerX = w/2, centerY = h/2;
+
+    // ----- グローバル -----
+    let layers = [];
+    let nextId = 1;
+    let globalLfoSpeed = 0.5;
+    let globalLfoDepth = 0.3;
+    let lfoPhase = 0;
+    let drawMode = false;
+    let drawPoints = [];
+    let isDrawing = false;
+    let animTime = 0;
+
+    // ----- スーパーフォーミュラ -----
+    function superformula(phi, m, n1, n2, n3, r0) {
+        const a = 1.0, b = 1.0;
+        const t1 = Math.pow(Math.abs(Math.cos(m * phi / 4) / a), n2);
+        const t2 = Math.pow(Math.abs(Math.sin(m * phi / 4) / b), n3);
+        const r = Math.pow(t1 + t2, -1 / n1);
+        return r0 * (isNaN(r) ? 1 : Math.min(2.5, r));
+    }
+
+    // ----- LFO применения -----
+    function applyLFO(layer, paramName, base, minV, maxV) {
+        const lfo = layer.lfo[paramName];
+        if (!lfo || !lfo.enabled) return base;
+        const speed = lfo.speed * globalLfoSpeed;
+        const depth = lfo.depth * globalLfoDepth;
+        const mod = Math.sin(lfoPhase * Math.PI * 2 * speed) * depth;
+        let val = base + mod * (maxV - minV) * 0.3;
+        return Math.min(maxV, Math.max(minV, val));
+    }
+
+    // ----- Отрисовка всех слоёв -----
+    function drawAllLayers() {
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, w, h);
+        // ручной слой
+        if (drawPoints.length > 1) {
+            ctx.beginPath();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            for (let i=0; i<drawPoints.length; i++) {
+                if (i===0) ctx.moveTo(drawPoints[i].x, drawPoints[i].y);
+                else ctx.lineTo(drawPoints[i].x, drawPoints[i].y);
             }
+            ctx.stroke();
         }
-        
-        // Начальные данные: добавим одну кривую по умолчанию
-        function defaultSuperParams() {
-            return { m: 5, n1: 1.0, n2: 1.0, n3: 1.0, radius: 1.0, rotation: 0 };
-        }
-        function defaultLissajousParams() {
-            return { freqX: 3, freqY: 4, phase: 90 };
-        }
-        function defaultSpiralParams() {
-            return { a: 1, b: 0.2, turns: 4 };
-        }
-        function defaultWaveParams() {
-            return { amplitude: 1.2, frequency: 2, phase: 0 };
-        }
-        
-        function addCurve(type) {
-            let params;
-            if (type === 'super') params = defaultSuperParams();
-            else if (type === 'lissajous') params = defaultLissajousParams();
-            else if (type === 'spiral') params = defaultSpiralParams();
-            else params = defaultWaveParams();
-            const curve = new Curve(nextId++, type, params);
-            curves.push(curve);
-            renderCurveList();
-        }
-        
-        function removeCurve(id) {
-            curves = curves.filter(c => c.id !== id);
-            renderCurveList();
-        }
-        
-        // Отрисовка списка кривых в панели
-        function renderCurveList() {
-            const container = document.getElementById('curveList');
-            container.innerHTML = '';
-            curves.forEach(curve => {
-                const div = document.createElement('div');
-                div.className = 'curve-item';
-                div.innerHTML = `
-                    <span style="flex:1;">#${curve.id} ${curve.type}</span>
-                    <button class="editCurveBtn" data-id="${curve.id}">✎</button>
-                    <button class="removeCurveBtn" data-id="${curve.id}">🗑</button>
-                `;
-                container.appendChild(div);
-            });
-            document.getElementById('curveCountStatus').innerText = `${curves.length} カーブ`;
-            // Добавим обработчики
-            document.querySelectorAll('.removeCurveBtn').forEach(btn => {
-                btn.onclick = (e) => {
-                    const id = parseInt(btn.dataset.id);
-                    removeCurve(id);
-                };
-            });
-            document.querySelectorAll('.editCurveBtn').forEach(btn => {
-                btn.onclick = (e) => {
-                    const id = parseInt(btn.dataset.id);
-                    openCurveEditor(id);
-                };
-            });
-        }
-        
-        // Модальное окно для редактирования параметров кривой (с возможностью LFO)
-        function openCurveEditor(id) {
-            const curve = curves.find(c => c.id === id);
-            if (!curve) return;
-            // Создаем диалог – для простоты используем window.prompt? Нет, сделаем div.
-            // Но чтобы не усложнять, откроем новое окно параметров? Сделаем быстрое всплывающее окно.
-            // Лучше: попросим пользователя ввести параметры через стандартный prompt? Неудобно.
-            // Реализуем динамическую форму в отдельном панели. Я создам временную панель.
-            let editorDiv = document.getElementById('tempEditor');
-            if (!editorDiv) {
-                editorDiv = document.createElement('div');
-                editorDiv.id = 'tempEditor';
-                editorDiv.className = 'panel';
-                editorDiv.style.position = 'absolute';
-                editorDiv.style.top = '100px';
-                editorDiv.style.left = '400px';
-                editorDiv.style.width = '300px';
-                editorDiv.style.zIndex = 2000;
-                document.body.appendChild(editorDiv);
-            }
-            editorDiv.innerHTML = `<div class="panel-header">カーブ #${curve.id} 編集</div><div class="panel-content" id="editorContent"></div><button id="closeEditorBtn">閉じる</button>`;
-            const content = document.getElementById('editorContent');
-            // Генерация ползунков в зависимости от типа
-            let html = '';
-            if (curve.type === 'super') {
-                html += `<div class="slider-group"><label>m (対称性) <span id="param_m_val">${curve.params.m}</span></label><input type="range" id="param_m" min="0.5" max="20" step="0.1" value="${curve.params.m}"></div>`;
-                html += `<div class="slider-group"><label>n1 <span id="param_n1_val">${curve.params.n1}</span></label><input type="range" id="param_n1" min="0.1" max="10" step="0.1" value="${curve.params.n1}"></div>`;
-                html += `<div class="slider-group"><label>n2 <span id="param_n2_val">${curve.params.n2}</span></label><input type="range" id="param_n2" min="0.1" max="10" step="0.1" value="${curve.params.n2}"></div>`;
-                html += `<div class="slider-group"><label>n3 <span id="param_n3_val">${curve.params.n3}</span></label><input type="range" id="param_n3" min="0.1" max="10" step="0.1" value="${curve.params.n3}"></div>`;
-                html += `<div class="slider-group"><label>半径 <span id="param_radius_val">${curve.params.radius}</span></label><input type="range" id="param_radius" min="0.2" max="2.5" step="0.02" value="${curve.params.radius}"></div>`;
-                html += `<div class="slider-group"><label>回転(deg) <span id="param_rot_val">${curve.params.rotation}</span></label><input type="range" id="param_rot" min="-180" max="180" step="1" value="${curve.params.rotation}"></div>`;
-            } else if (curve.type === 'lissajous') {
-                html += `<div class="slider-group"><label>周波数 X <span id="param_fx_val">${curve.params.freqX}</span></label><input type="range" id="param_fx" min="0.5" max="9" step="0.1" value="${curve.params.freqX}"></div>`;
-                html += `<div class="slider-group"><label>周波数 Y <span id="param_fy_val">${curve.params.freqY}</span></label><input type="range" id="param_fy" min="0.5" max="9" step="0.1" value="${curve.params.freqY}"></div>`;
-                html += `<div class="slider-group"><label>位相 <span id="param_phase_val">${curve.params.phase}</span></label><input type="range" id="param_phase" min="0" max="360" step="1" value="${curve.params.phase}"></div>`;
-            } else if (curve.type === 'spiral') {
-                html += `<div class="slider-group"><label>a <span id="param_a_val">${curve.params.a}</span></label><input type="range" id="param_a" min="0.5" max="3" step="0.05" value="${curve.params.a}"></div>`;
-                html += `<div class="slider-group"><label>b <span id="param_b_val">${curve.params.b}</span></label><input type="range" id="param_b" min="0" max="1.5" step="0.02" value="${curve.params.b}"></div>`;
-                html += `<div class="slider-group"><label>回転数 <span id="param_turns_val">${curve.params.turns}</span></label><input type="range" id="param_turns" min="1" max="10" step="0.5" value="${curve.params.turns}"></div>`;
-            } else if (curve.type === 'wave') {
-                html += `<div class="slider-group"><label>振幅 <span id="param_amp_val">${curve.params.amplitude}</span></label><input type="range" id="param_amp" min="0.3" max="2.5" step="0.05" value="${curve.params.amplitude}"></div>`;
-                html += `<div class="slider-group"><label>周波数 <span id="param_freq_val">${curve.params.frequency}</span></label><input type="range" id="param_freq" min="0.5" max="8" step="0.2" value="${curve.params.frequency}"></div>`;
-                html += `<div class="slider-group"><label>位相 <span id="param_phs_val">${curve.params.phase}</span></label><input type="range" id="param_phs" min="0" max="360" step="5" value="${curve.params.phase}"></div>`;
-            }
-            // Добавим LFO
-            html += `<hr><div class="lfo-control"><label>LFO 有効 <input type="checkbox" id="lfoEnable" ${curve.lfo.enabled ? 'checked' : ''}></label><br>`;
-            html += `<div class="slider-group"><label>ターゲットパラメータ</label><select id="lfoTarget">`;
-            // Определяем список параметров для данного типа
-            let paramNames = [];
-            if (curve.type === 'super') paramNames = ['m','n1','n2','n3','radius','rotation'];
-            else if (curve.type === 'lissajous') paramNames = ['freqX','freqY','phase'];
-            else if (curve.type === 'spiral') paramNames = ['a','b','turns'];
-            else paramNames = ['amplitude','frequency','phase'];
-            paramNames.forEach(p => {
-                html += `<option value="${p}" ${curve.lfo.target === p ? 'selected' : ''}>${p}</option>`;
-            });
-            html += `</select></div>`;
-            html += `<div class="slider-group"><label>波形 <select id="lfoWaveform"><option value="sine" ${curve.lfo.waveform==='sine'?'selected':''}>サイン</option><option value="triangle" ${curve.lfo.waveform==='triangle'?'selected':''}>三角</option><option value="square" ${curve.lfo.waveform==='square'?'selected':''}>方形</option><option value="random" ${curve.lfo.waveform==='random'?'selected':''}>ランダム</option></select></label></div>`;
-            html += `<div class="slider-group"><label>周波数 (Hz) <span id="lfoFreqVal">${curve.lfo.freq}</span></label><input type="range" id="lfoFreq" min="0.1" max="5" step="0.05" value="${curve.lfo.freq}"></div>`;
-            html += `<div class="slider-group"><label>深さ <span id="lfoDepthVal">${curve.lfo.depth}</span></label><input type="range" id="lfoDepth" min="0" max="2" step="0.05" value="${curve.lfo.depth}"></div>`;
-            html += `</div>`;
-            content.innerHTML = html;
-            // Привязываем события
-            function attachEvents() {
-                // Параметры кривой
-                if (curve.type === 'super') {
-                    document.getElementById('param_m').oninput = (e) => { curve.params.m = parseFloat(e.target.value); document.getElementById('param_m_val').innerText = curve.params.m; };
-                    document.getElementById('param_n1').oninput = (e) => { curve.params.n1 = parseFloat(e.target.value); document.getElementById('param_n1_val').innerText = curve.params.n1; };
-                    document.getElementById('param_n2').oninput = (e) => { curve.params.n2 = parseFloat(e.target.value); document.getElementById('param_n2_val').innerText = curve.params.n2; };
-                    document.getElementById('param_n3').oninput = (e) => { curve.params.n3 = parseFloat(e.target.value); document.getElementById('param_n3_val').innerText = curve.params.n3; };
-                    document.getElementById('param_radius').oninput = (e) => { curve.params.radius = parseFloat(e.target.value); document.getElementById('param_radius_val').innerText = curve.params.radius; };
-                    document.getElementById('param_rot').oninput = (e) => { curve.params.rotation = parseFloat(e.target.value); document.getElementById('param_rot_val').innerText = curve.params.rotation; };
-                } else if (curve.type === 'lissajous') {
-                    document.getElementById('param_fx').oninput = (e) => { curve.params.freqX = parseFloat(e.target.value); document.getElementById('param_fx_val').innerText = curve.params.freqX; };
-                    document.getElementById('param_fy').oninput = (e) => { curve.params.freqY = parseFloat(e.target.value); document.getElementById('param_fy_val').innerText = curve.params.freqY; };
-                    document.getElementById('param_phase').oninput = (e) => { curve.params.phase = parseFloat(e.target.value); document.getElementById('param_phase_val').innerText = curve.params.phase; };
-                } else if (curve.type === 'spiral') {
-                    document.getElementById('param_a').oninput = (e) => { curve.params.a = parseFloat(e.target.value); document.getElementById('param_a_val').innerText = curve.params.a; };
-                    document.getElementById('param_b').oninput = (e) => { curve.params.b = parseFloat(e.target.value); document.getElementById('param_b_val').innerText = curve.params.b; };
-                    document.getElementById('param_turns').oninput = (e) => { curve.params.turns = parseFloat(e.target.value); document.getElementById('param_turns_val').innerText = curve.params.turns; };
-                } else if (curve.type === 'wave') {
-                    document.getElementById('param_amp').oninput = (e) => { curve.params.amplitude = parseFloat(e.target.value); document.getElementById('param_amp_val').innerText = curve.params.amplitude; };
-                    document.getElementById('param_freq').oninput = (e) => { curve.params.frequency = parseFloat(e.target.value); document.getElementById('param_freq_val').innerText = curve.params.frequency; };
-                    document.getElementById('param_phs').oninput = (e) => { curve.params.phase = parseFloat(e.target.value); document.getElementById('param_phs_val').innerText = curve.params.phase; };
-                }
-                // LFO
-                const lfoEnable = document.getElementById('lfoEnable');
-                const lfoTarget = document.getElementById('lfoTarget');
-                const lfoWaveform = document.getElementById('lfoWaveform');
-                const lfoFreq = document.getElementById('lfoFreq');
-                const lfoDepth = document.getElementById('lfoDepth');
-                lfoEnable.onchange = () => { curve.lfo.enabled = lfoEnable.checked; };
-                lfoTarget.onchange = () => { curve.lfo.target = lfoTarget.value; };
-                lfoWaveform.onchange = () => { curve.lfo.waveform = lfoWaveform.value; };
-                lfoFreq.oninput = () => { curve.lfo.freq = parseFloat(lfoFreq.value); document.getElementById('lfoFreqVal').innerText = curve.lfo.freq; };
-                lfoDepth.oninput = () => { curve.lfo.depth = parseFloat(lfoDepth.value); document.getElementById('lfoDepthVal').innerText = curve.lfo.depth; };
-            }
-            attachEvents();
-            document.getElementById('closeEditorBtn').onclick = () => {
-                editorDiv.style.display = 'none';
-            };
-            editorDiv.style.display = 'block';
-        }
-        
-        // Отрисовка всех кривых на canvas
-        let animTime = 0;
-        function lfoValue(waveform, phase, freq, t) {
-            let angle = t * freq * Math.PI * 2 + phase;
-            switch(waveform) {
-                case 'sine': return Math.sin(angle);
-                case 'triangle': return 2 * Math.abs(angle / Math.PI - 2 * Math.floor(angle / Math.PI + 0.5)) - 1;
-                case 'square': return Math.sin(angle) > 0 ? 1 : -1;
-                case 'random': return Math.sin(angle * 100) > 0 ? 1 : -1; // псевдослучайное
-                default: return Math.sin(angle);
-            }
-        }
-        
-        function getCurvePoints(curve, time) {
-            const t = time;
-            const points = [];
-            const steps = 500;
-            if (curve.type === 'super') {
-                let p = curve.params;
-                for (let i = 0; i <= steps; i++) {
-                    let phi = (i / steps) * Math.PI * 2;
-                    let m = p.m, n1 = p.n1, n2 = p.n2, n3 = p.n3, rad = p.radius, rot = p.rotation * Math.PI/180;
-                    // Применяем LFO, если включен
-                    if (curve.lfo.enabled) {
-                        let target = curve.lfo.target;
-                        let depth = curve.lfo.depth;
-                        let lfoVal = lfoValue(curve.lfo.waveform, curve.lfo.phase, curve.lfo.freq, time);
-                        let delta = depth * lfoVal;
-                        if (target === 'm') m = Math.max(0.5, p.m + delta);
-                        else if (target === 'n1') n1 = Math.max(0.1, p.n1 + delta);
-                        else if (target === 'n2') n2 = Math.max(0.1, p.n2 + delta);
-                        else if (target === 'n3') n3 = Math.max(0.1, p.n3 + delta);
-                        else if (target === 'radius') rad = Math.max(0.2, p.radius + delta);
-                        else if (target === 'rotation') rot = (p.rotation + delta*30) * Math.PI/180;
-                    }
-                    const term1 = Math.pow(Math.abs(Math.cos(m * phi / 4)), n2);
-                    const term2 = Math.pow(Math.abs(Math.sin(m * phi / 4)), n3);
-                    let r = Math.pow(term1 + term2, -1 / n1) * rad;
-                    if (isNaN(r)) r = 0;
-                    let x = r * Math.cos(phi + rot);
-                    let y = r * Math.sin(phi + rot);
-                    points.push({x, y});
-                }
-            } else if (curve.type === 'lissajous') {
-                let p = curve.params;
-                let freqX = p.freqX, freqY = p.freqY, phase = p.phase * Math.PI/180;
-                if (curve.lfo.enabled) {
-                    let target = curve.lfo.target;
-                    let depth = curve.lfo.depth;
-                    let lfoVal = lfoValue(curve.lfo.waveform, curve.lfo.phase, curve.lfo.freq, time);
-                    if (target === 'freqX') freqX = Math.max(0.5, p.freqX + depth * lfoVal);
-                    else if (target === 'freqY') freqY = Math.max(0.5, p.freqY + depth * lfoVal);
-                    else if (target === 'phase') phase = (p.phase + depth * lfoVal * 180) * Math.PI/180;
-                }
-                for (let i = 0; i <= steps; i++) {
-                    let t_ = (i / steps) * Math.PI * 2;
-                    let x = Math.sin(freqX * t_ + phase);
-                    let y = Math.sin(freqY * t_);
-                    points.push({x, y});
-                }
-            } else if (curve.type === 'spiral') {
-                let p = curve.params;
-                let a = p.a, b = p.b, turns = p.turns;
-                for (let i = 0; i <= steps; i++) {
-                    let phi = (i / steps) * turns * 2 * Math.PI;
-                    let r = a + b * phi;
-                    let x = r * Math.cos(phi);
-                    let y = r * Math.sin(phi);
-                    points.push({x, y});
-                }
-            } else if (curve.type === 'wave') {
-                let p = curve.params;
-                let amp = p.amplitude, freq = p.frequency, phase = p.phase * Math.PI/180;
-                for (let i = 0; i <= steps; i++) {
-                    let x = (i / steps) * 2 * Math.PI - Math.PI;
-                    let y = amp * Math.sin(freq * x + phase);
-                    points.push({x, y});
-                }
-            }
-            return points;
-        }
-        
-        function drawAllCurves() {
-            ctx.clearRect(0, 0, width, height);
-            ctx.fillStyle = invert ? '#fff' : '#000';
-            ctx.fillRect(0, 0, width, height);
-            const glitch = globalGlitch;
-            const pixel = globalPixel;
-            const vol = isAudioActive ? avgVolume : 0;
-            const dynamicGlitch = glitch + vol * 0.5;
-            curves.forEach(curve => {
-                let points = getCurvePoints(curve, animTime);
-                ctx.beginPath();
-                ctx.strokeStyle = invert ? '#000' : '#fff';
-                ctx.lineWidth = 1.5;
-                for (let i = 0; i < points.length; i++) {
-                    let x = points[i].x * (Math.min(width,height)/2.5);
-                    let y = points[i].y * (Math.min(width,height)/2.5);
-                    if (dynamicGlitch > 0.01) {
-                        x += Math.sin(i * 0.2) * dynamicGlitch * 15;
-                        y += Math.cos(i * 0.3 + animTime) * dynamicGlitch * 15;
-                        if (Math.random() < dynamicGlitch * 0.03) {
-                            x += (Math.random() - 0.5) * 20;
-                            y += (Math.random() - 0.5) * 20;
-                        }
-                    }
-                    if (pixel > 1) {
-                        let step = pixel * 2;
-                        x = Math.round(x / step) * step;
-                        y = Math.round(y / step) * step;
-                    }
-                    const sx = centerX + x;
-                    const sy = centerY + y;
-                    if (i === 0) ctx.moveTo(sx, sy);
+        // слои
+        for (let layer of layers) {
+            if (!layer.visible) continue;
+            ctx.save();
+            ctx.strokeStyle = `rgb(${layer.color},${layer.color},${layer.color})`;
+            ctx.lineWidth = layer.lineWidth;
+            ctx.beginPath();
+            let first = true;
+            const pts = 2000;
+            if (layer.type === 'super') {
+                let m = applyLFO(layer, 'm', layer.m, 0.5, 20);
+                let n1 = applyLFO(layer, 'n1', layer.n1, 0.1, 10);
+                let n2 = applyLFO(layer, 'n2', layer.n2, 0.1, 10);
+                let n3 = applyLFO(layer, 'n3', layer.n3, 0.1, 10);
+                let rad = applyLFO(layer, 'radius', layer.radius, 0.2, 2.5);
+                let rot = applyLFO(layer, 'rotation', layer.rotation, -180, 180) * Math.PI/180;
+                for (let i=0; i<=pts; i++) {
+                    let phi = (i/pts) * Math.PI * 2;
+                    let r = superformula(phi, m, n1, n2, n3, rad);
+                    let x = r * Math.cos(phi + rot) * (Math.min(w,h)/3);
+                    let y = r * Math.sin(phi + rot) * (Math.min(w,h)/3);
+                    let sx = centerX + x;
+                    let sy = centerY + y;
+                    if (first) { ctx.moveTo(sx, sy); first=false; }
                     else ctx.lineTo(sx, sy);
                 }
-                ctx.stroke();
-            });
-        }
-        
-        // ---------- Аудиоцепь (аналогично предыдущим версиям) ----------
-        let audioCtx = null, sourceNode = null, analyser = null;
-        let isAudioActive = false;
-        let freqData = [], timeData = [];
-        let avgVolume = 0, bassEnergy = 0, highEnergy = 0;
-        let _audioNodes = null;
-        
-        function createAudioChain() {
-            if (!audioCtx) return;
-            const low = audioCtx.createBiquadFilter(); low.type = 'lowshelf'; low.frequency.value = 200;
-            const mid = audioCtx.createBiquadFilter(); mid.type = 'peaking'; mid.frequency.value = 1000; mid.Q.value = 1;
-            const high = audioCtx.createBiquadFilter(); high.type = 'highshelf'; high.frequency.value = 5000;
-            const comp = audioCtx.createDynamicsCompressor(); comp.knee.value = 6;
-            const shaper = audioCtx.createWaveShaper();
-            const reverb = audioCtx.createConvolver();
-            const dryWet = audioCtx.createGain();
-            const master = audioCtx.createGain();
-            const analys = audioCtx.createAnalyser(); analys.fftSize = 512;
-            _audioNodes = { low, mid, high, comp, shaper, reverb, dryWet, master, analys };
-            updateAudioFX();
-        }
-        function makeDistCurve(amt) {
-            let n = 44100, curve = new Float32Array(n);
-            for (let i=0; i<n; i++) {
-                let x = (i*2/n)-1;
-                curve[i] = (3+amt)*x*Math.PI*0.7/(Math.PI+amt*Math.abs(x));
-            }
-            return curve;
-        }
-        function updateAudioFX() {
-            if (!_audioNodes) return;
-            _audioNodes.low.gain.value = lowEQ;
-            _audioNodes.mid.gain.value = midEQ;
-            _audioNodes.high.gain.value = highEQ;
-            _audioNodes.comp.threshold.value = compThresh;
-            _audioNodes.comp.ratio.value = 4;
-            _audioNodes.shaper.curve = makeDistCurve(distAmt);
-            if (reverbMix > 0.01 && audioCtx) {
-                const sr = audioCtx.sampleRate;
-                const len = sr * 1.2;
-                const impulse = audioCtx.createBuffer(2, len, sr);
-                for (let ch=0; ch<2; ch++) {
-                    let chan = impulse.getChannelData(ch);
-                    for (let i=0; i<len; i++) chan[i] = (Math.random()*2-1)*Math.exp(-i/(sr*0.3));
+            } else if (layer.type === 'lissajous') {
+                let fx = applyLFO(layer, 'freqX', layer.freqX, 0.3, 9);
+                let fy = applyLFO(layer, 'freqY', layer.freqY, 0.3, 9);
+                let ph = applyLFO(layer, 'phase', layer.phase, 0, 360) * Math.PI/180;
+                for (let i=0; i<=pts; i++) {
+                    let t = (i/pts) * Math.PI * 2;
+                    let x = Math.sin(fx * t + ph + animTime*0.2) * (w/3);
+                    let y = Math.sin(fy * t) * (h/3);
+                    let sx = centerX + x;
+                    let sy = centerY + y;
+                    if (first) { ctx.moveTo(sx, sy); first=false; }
+                    else ctx.lineTo(sx, sy);
                 }
-                _audioNodes.reverb.buffer = impulse;
-            } else _audioNodes.reverb.buffer = null;
-            _audioNodes.dryWet.gain.value = Math.min(1.0, reverbMix);
+            }
+            ctx.stroke();
+            ctx.restore();
         }
-        async function startAudioWithStream(stream) {
-            if (audioCtx) await audioCtx.close();
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            createAudioChain();
-            const source = audioCtx.createMediaStreamSource(stream);
-            source.connect(_audioNodes.low);
-            _audioNodes.low.connect(_audioNodes.mid); _audioNodes.mid.connect(_audioNodes.high); _audioNodes.high.connect(_audioNodes.comp);
-            _audioNodes.comp.connect(_audioNodes.shaper);
-            _audioNodes.shaper.connect(_audioNodes.master);
-            _audioNodes.shaper.connect(_audioNodes.reverb); _audioNodes.reverb.connect(_audioNodes.dryWet); _audioNodes.dryWet.connect(_audioNodes.master);
-            _audioNodes.master.connect(_audioNodes.analys);
-            _audioNodes.analys.connect(audioCtx.destination);
-            await audioCtx.resume();
-            isAudioActive = true;
-            document.getElementById('audioStatus').innerText = '🎤 マイク + エフェクトON';
+    }
+
+    // ----- LFO инициализация -----
+    function initLfo(layer, param) {
+        if (!layer.lfo[param]) layer.lfo[param] = { enabled: false, speed: 0.5, depth: 0.3 };
+    }
+
+    // ----- Создание слоя -----
+    function createLayer(type) {
+        let layer = {
+            id: nextId++,
+            type: type,
+            visible: true,
+            color: Math.floor(Math.random() * 180 + 75),
+            lineWidth: 1.5,
+            lfo: {}
+        };
+        if (type === 'super') {
+            layer.m = 5.0; layer.n1 = 1.0; layer.n2 = 1.0; layer.n3 = 1.0; layer.radius = 1.0; layer.rotation = 0;
+            ['m','n1','n2','n3','radius','rotation'].forEach(p => initLfo(layer, p));
+        } else {
+            layer.freqX = 3.0; layer.freqY = 4.0; layer.phase = 90;
+            ['freqX','freqY','phase'].forEach(p => initLfo(layer, p));
         }
-        async function startAudioWithFile(file) {
-            if (audioCtx) await audioCtx.close();
+        return layer;
+    }
+
+    // ----- UI слоёв -----
+    function renderLayersUI() {
+        const container = document.getElementById('layersList');
+        if (!container) return;
+        container.innerHTML = '';
+        for (let layer of layers) {
+            const div = document.createElement('div');
+            div.className = 'layer-card';
+            div.innerHTML = `
+                <div class="layer-header">
+                    <span>🔘 #${layer.id} (${layer.type})</span>
+                    <div><button class="toggleVis" data-id="${layer.id}" style="width:auto;">👁️</button><button class="delLayer" data-id="${layer.id}" style="width:auto;">🗑️</button></div>
+                </div>
+                <div class="knob-row"><span>明るさ</span><input type="range" min="0" max="255" value="${layer.color}" class="layerColor" data-id="${layer.id}"><span>${layer.color}</span></div>
+                <div class="knob-row"><span>線幅</span><input type="range" min="0.5" max="4" step="0.1" value="${layer.lineWidth}" class="layerWidth" data-id="${layer.id}"><span>${layer.lineWidth}</span></div>
+            `;
+            if (layer.type === 'super') {
+                div.innerHTML += `
+                    <div class="param-group">m: <input type="range" min="0.5" max="20" step="0.1" value="${layer.m}" class="layerParam" data-id="${layer.id}" data-param="m"><span>${layer.m.toFixed(2)}</span></div>
+                    <div class="param-group">n1: <input type="range" min="0.1" max="10" step="0.05" value="${layer.n1}" class="layerParam" data-id="${layer.id}" data-param="n1"><span>${layer.n1.toFixed(2)}</span></div>
+                    <div class="param-group">n2: <input type="range" min="0.1" max="10" step="0.05" value="${layer.n2}" class="layerParam" data-id="${layer.id}" data-param="n2"><span>${layer.n2.toFixed(2)}</span></div>
+                    <div class="param-group">n3: <input type="range" min="0.1" max="10" step="0.05" value="${layer.n3}" class="layerParam" data-id="${layer.id}" data-param="n3"><span>${layer.n3.toFixed(2)}</span></div>
+                    <div class="param-group">半径: <input type="range" min="0.2" max="2.5" step="0.02" value="${layer.radius}" class="layerParam" data-id="${layer.id}" data-param="radius"><span>${layer.radius.toFixed(2)}</span></div>
+                    <div class="param-group">回転: <input type="range" min="-180" max="180" step="1" value="${layer.rotation}" class="layerParam" data-id="${layer.id}" data-param="rotation"><span>${layer.rotation}°</span></div>
+                `;
+                ['m','n1','n2','n3','radius','rotation'].forEach(p => {
+                    const l = layer.lfo[p];
+                    div.innerHTML += `
+                        <div class="flex" style="margin-top:4px;">
+                            <input type="checkbox" class="lfoEnable" data-id="${layer.id}" data-param="${p}" ${l.enabled ? 'checked' : ''}><span style="width:40px;">LFO ${p}</span>
+                            <input type="range" min="0.1" max="2" step="0.05" value="${l.speed}" class="lfoSpeed" data-id="${layer.id}" data-param="${p}" style="width:60px;"><span>${l.speed.toFixed(2)}</span>
+                            <input type="range" min="0" max="1" step="0.05" value="${l.depth}" class="lfoDepth" data-id="${layer.id}" data-param="${p}" style="width:50px;"><span>${l.depth.toFixed(2)}</span>
+                        </div>
+                    `;
+                });
+            } else {
+                div.innerHTML += `
+                    <div class="param-group">freq X: <input type="range" min="0.3" max="9" step="0.1" value="${layer.freqX}" class="layerParam" data-id="${layer.id}" data-param="freqX"><span>${layer.freqX.toFixed(2)}</span></div>
+                    <div class="param-group">freq Y: <input type="range" min="0.3" max="9" step="0.1" value="${layer.freqY}" class="layerParam" data-id="${layer.id}" data-param="freqY"><span>${layer.freqY.toFixed(2)}</span></div>
+                    <div class="param-group">phase: <input type="range" min="0" max="360" step="1" value="${layer.phase}" class="layerParam" data-id="${layer.id}" data-param="phase"><span>${layer.phase}°</span></div>
+                `;
+                ['freqX','freqY','phase'].forEach(p => {
+                    const l = layer.lfo[p];
+                    div.innerHTML += `
+                        <div class="flex" style="margin-top:4px;">
+                            <input type="checkbox" class="lfoEnable" data-id="${layer.id}" data-param="${p}" ${l.enabled ? 'checked' : ''}><span style="width:40px;">LFO ${p}</span>
+                            <input type="range" min="0.1" max="2" step="0.05" value="${l.speed}" class="lfoSpeed" data-id="${layer.id}" data-param="${p}" style="width:60px;"><span>${l.speed.toFixed(2)}</span>
+                            <input type="range" min="0" max="1" step="0.05" value="${l.depth}" class="lfoDepth" data-id="${layer.id}" data-param="${p}" style="width:50px;"><span>${l.depth.toFixed(2)}</span>
+                        </div>
+                    `;
+                });
+            }
+            container.appendChild(div);
+        }
+        attachLayerEvents();
+    }
+
+    function attachLayerEvents() {
+        document.querySelectorAll('.toggleVis').forEach(btn => btn.onclick = () => { let l = layers.find(l=>l.id==parseInt(btn.dataset.id)); if(l) l.visible=!l.visible; renderLayersUI(); });
+        document.querySelectorAll('.delLayer').forEach(btn => btn.onclick = () => { layers = layers.filter(l=>l.id!=parseInt(btn.dataset.id)); renderLayersUI(); });
+        document.querySelectorAll('.layerColor').forEach(sl => sl.oninput = () => { let l = layers.find(l=>l.id==parseInt(sl.dataset.id)); if(l) l.color=parseInt(sl.value); sl.nextElementSibling.innerText=sl.value; });
+        document.querySelectorAll('.layerWidth').forEach(sl => sl.oninput = () => { let l = layers.find(l=>l.id==parseInt(sl.dataset.id)); if(l) l.lineWidth=parseFloat(sl.value); sl.nextElementSibling.innerText=sl.value; });
+        document.querySelectorAll('.layerParam').forEach(sl => sl.oninput = () => { let l=layers.find(l=>l.id==parseInt(sl.dataset.id)); if(l) { l[sl.dataset.param]=parseFloat(sl.value); sl.nextElementSibling.innerText=l[sl.dataset.param].toFixed(2); } });
+        document.querySelectorAll('.lfoEnable').forEach(cb => cb.onchange = () => { let l=layers.find(l=>l.id==parseInt(cb.dataset.id)); if(l && l.lfo[cb.dataset.param]) l.lfo[cb.dataset.param].enabled=cb.checked; });
+        document.querySelectorAll('.lfoSpeed').forEach(sl => sl.oninput = () => { let l=layers.find(l=>l.id==parseInt(sl.dataset.id)); if(l && l.lfo[sl.dataset.param]) { l.lfo[sl.dataset.param].speed=parseFloat(sl.value); sl.nextElementSibling.innerText=l.lfo[sl.dataset.param].speed.toFixed(2); } });
+        document.querySelectorAll('.lfoDepth').forEach(sl => sl.oninput = () => { let l=layers.find(l=>l.id==parseInt(sl.dataset.id)); if(l && l.lfo[sl.dataset.param]) { l.lfo[sl.dataset.param].depth=parseFloat(sl.value); sl.nextElementSibling.innerText=l.lfo[sl.dataset.param].depth.toFixed(2); } });
+    }
+
+    // ----- АУДИО (стабильная версия) -----
+    let audioCtx = null;
+    let sourceNode = null;
+    let analyserNode = null;
+    let isAudioActive = false;
+    let audioNodes = null;
+    let audioFileBuffer = null;
+    let freqData = [], timeData = [];
+    let avgVolume = 0, bassEnergy = 0, highEnergy = 0;
+
+    function createAudioChain() {
+        if (!audioCtx) return;
+        const low = audioCtx.createBiquadFilter(); low.type='lowshelf'; low.frequency.value=200;
+        const mid = audioCtx.createBiquadFilter(); mid.type='peaking'; mid.frequency.value=1000; mid.Q.value=1;
+        const high = audioCtx.createBiquadFilter(); high.type='highshelf'; high.frequency.value=5000;
+        const comp = audioCtx.createDynamicsCompressor(); comp.knee.value=6;
+        const shaper = audioCtx.createWaveShaper();
+        const reverb = audioCtx.createConvolver();
+        const dryWet = audioCtx.createGain();
+        const master = audioCtx.createGain();
+        const analys = audioCtx.createAnalyser(); analys.fftSize=512;
+        audioNodes = { low, mid, high, comp, shaper, reverb, dryWet, master, analys };
+        updateAudioFX();
+    }
+    function makeDistortionCurve(amt) {
+        let n=44100, curve=new Float32Array(n);
+        for(let i=0;i<n;i++) { let x=(i*2/n)-1; curve[i]=(3+amt)*x*Math.PI*0.7/(Math.PI+amt*Math.abs(x)); }
+        return curve;
+    }
+    function updateAudioFX() {
+        if(!audioNodes) return;
+        audioNodes.low.gain.value = parseFloat(document.getElementById('knobLow')?.getAttribute('data-val')||0);
+        audioNodes.mid.gain.value = parseFloat(document.getElementById('knobMid')?.getAttribute('data-val')||0);
+        audioNodes.high.gain.value = parseFloat(document.getElementById('knobHigh')?.getAttribute('data-val')||0);
+        audioNodes.comp.threshold.value = parseFloat(document.getElementById('knobThr')?.getAttribute('data-val')||-20);
+        audioNodes.comp.ratio.value = 4;
+        audioNodes.shaper.curve = makeDistortionCurve(parseFloat(document.getElementById('knobDist')?.getAttribute('data-val')||0));
+        let rev = parseFloat(document.getElementById('knobRev')?.getAttribute('data-val')||0);
+        if(rev>0.01 && audioCtx) {
+            let sr=audioCtx.sampleRate, len=sr*1.2;
+            let impulse=audioCtx.createBuffer(2,len,sr);
+            for(let ch=0;ch<2;ch++) { let chan=impulse.getChannelData(ch); for(let i=0;i<len;i++) chan[i]=(Math.random()*2-1)*Math.exp(-i/(sr*0.3)); }
+            audioNodes.reverb.buffer=impulse;
+        } else audioNodes.reverb.buffer=null;
+        audioNodes.dryWet.gain.value=Math.min(1,rev);
+    }
+    async function startMicrophone() {
+        if(audioCtx) await audioCtx.close();
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        createAudioChain();
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        sourceNode = audioCtx.createMediaStreamSource(stream);
+        sourceNode.connect(audioNodes.low);
+        audioNodes.low.connect(audioNodes.mid); audioNodes.mid.connect(audioNodes.high); audioNodes.high.connect(audioNodes.comp);
+        audioNodes.comp.connect(audioNodes.shaper);
+        audioNodes.shaper.connect(audioNodes.master);
+        audioNodes.shaper.connect(audioNodes.reverb); audioNodes.reverb.connect(audioNodes.dryWet); audioNodes.dryWet.connect(audioNodes.master);
+        audioNodes.master.connect(audioNodes.analys);
+        audioNodes.analys.connect(audioCtx.destination);
+        await audioCtx.resume();
+        isAudioActive = true;
+        document.getElementById('audioStatus').innerText = '🎤 マイクON';
+    }
+    async function startAudioFile() {
+        let inp = document.createElement('input'); inp.type='file'; inp.accept='audio/*';
+        inp.onchange = async (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            if(audioCtx) await audioCtx.close();
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             createAudioChain();
             const buf = await file.arrayBuffer();
             const decoded = await audioCtx.decodeAudioData(buf);
             const bs = audioCtx.createBufferSource();
             bs.buffer = decoded; bs.loop = true;
-            bs.connect(_audioNodes.low);
-            _audioNodes.low.connect(_audioNodes.mid); _audioNodes.mid.connect(_audioNodes.high); _audioNodes.high.connect(_audioNodes.comp);
-            _audioNodes.comp.connect(_audioNodes.shaper);
-            _audioNodes.shaper.connect(_audioNodes.master);
-            _audioNodes.shaper.connect(_audioNodes.reverb); _audioNodes.reverb.connect(_audioNodes.dryWet); _audioNodes.dryWet.connect(_audioNodes.master);
-            _audioNodes.master.connect(_audioNodes.analys);
-            _audioNodes.analys.connect(audioCtx.destination);
+            sourceNode = bs;
+            bs.connect(audioNodes.low);
+            audioNodes.low.connect(audioNodes.mid); audioNodes.mid.connect(audioNodes.high); audioNodes.high.connect(audioNodes.comp);
+            audioNodes.comp.connect(audioNodes.shaper);
+            audioNodes.shaper.connect(audioNodes.master);
+            audioNodes.shaper.connect(audioNodes.reverb); audioNodes.reverb.connect(audioNodes.dryWet); audioNodes.dryWet.connect(audioNodes.master);
+            audioNodes.master.connect(audioNodes.analys);
+            audioNodes.analys.connect(audioCtx.destination);
             bs.start(0);
             await audioCtx.resume();
             isAudioActive = true;
             document.getElementById('audioStatus').innerHTML = `▶️ ${file.name.slice(0,24)}`;
-        }
-        document.getElementById('micBtn').onclick = async () => {
-            try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); await startAudioWithStream(stream); }
-            catch(e) { document.getElementById('audioStatus').innerText = 'マイクエラー'; }
         };
-        document.getElementById('uploadBtn').onclick = () => {
-            let inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'audio/*';
-            inp.onchange = async (e) => { if(e.target.files[0]) await startAudioWithFile(e.target.files[0]); };
-            inp.click();
+        inp.click();
+    }
+    document.getElementById('micBtn').onclick = startMicrophone;
+    document.getElementById('fileBtn').onclick = startAudioFile;
+
+    function updateAudioMeters() {
+        if(!isAudioActive || !audioNodes?.analys) {
+            avgVolume *= 0.98; bassEnergy *= 0.98; highEnergy *= 0.98;
+            return;
+        }
+        const analys = audioNodes.analys;
+        const freqLen = analys.frequencyBinCount;
+        if(freqData.length !== freqLen) { freqData = new Uint8Array(freqLen); timeData = new Uint8Array(analyser.fftSize); }
+        analys.getByteFrequencyData(freqData);
+        analys.getByteTimeDomainData(timeData);
+        let sum=0, bass=0, high=0;
+        for(let i=0; i<freqLen; i++) { let v=freqData[i]/255; sum+=v; if(i<12) bass+=v; if(i>60) high+=v; }
+        avgVolume = sum / freqLen;
+        bassEnergy = bass/12;
+        highEnergy = high/(freqLen-60);
+        let vu = Math.min(1.0, avgVolume*1.5);
+        document.getElementById('vuFill').style.width = (vu*100)+'%';
+        document.getElementById('vuText').innerText = Math.floor(vu*100)+'%';
+        document.getElementById('bassFill').style.width = (Math.min(1.0, bassEnergy*1.5)*100)+'%';
+        document.getElementById('highFill').style.width = (Math.min(1.0, highEnergy*1.5)*100)+'%';
+        // спектрограмма
+        let specC = document.getElementById('spectrogram');
+        let sCtx = specC.getContext('2d');
+        let sw = specC.width, sh = specC.height;
+        let img = sCtx.getImageData(1,0,sw-1,sh);
+        sCtx.putImageData(img,0,0);
+        sCtx.fillStyle='#000'; sCtx.fillRect(sw-1,0,1,sh);
+        for(let i=0;i<freqData.length;i++) { let barH=(freqData[i]/255)*sh; sCtx.fillStyle='#fff'; sCtx.fillRect(sw-1,sh-barH,1,barH); }
+        // спектр
+        let specC2 = document.getElementById('spectrum');
+        let sCtx2 = specC2.getContext('2d');
+        sCtx2.fillStyle='#000'; sCtx2.fillRect(0,0,specC2.width,specC2.height);
+        if(freqData.length) { let bw=specC2.width/freqLen; for(let i=0;i<freqLen;i++) { let h=(freqData[i]/255)*specC2.height; sCtx2.fillStyle='#fff'; sCtx2.fillRect(i*bw,specC2.height-h,Math.max(1,bw-1),h); } }
+        // огибающая
+        let envC = document.getElementById('envelope');
+        let eCtx = envC.getContext('2d');
+        eCtx.fillStyle='#000'; eCtx.fillRect(0,0,envC.width,envC.height);
+        if(freqData.length) { let step=Math.floor(freqData.length/envC.width); eCtx.beginPath(); for(let x=0;x<envC.width;x++) { let idx=Math.min(freqData.length-1,x*step); let y=envC.height-(freqData[idx]/255)*envC.height; if(x===0) eCtx.moveTo(x,y); else eCtx.lineTo(x,y); } eCtx.strokeStyle='#fff'; eCtx.stroke(); }
+        // доминанта
+        let maxIdx=0; for(let i=0;i<freqData.length;i++) if(freqData[i]>freqData[maxIdx]) maxIdx=i;
+        let sr = audioCtx?.sampleRate || 44100;
+        let fft = audioNodes?.analys?.fftSize || 512;
+        let dom = (maxIdx * sr) / fft;
+        document.getElementById('dominantFreq').innerHTML = `ドミナント: ${Math.round(dom)} Hz`;
+    }
+
+    // ----- НОБЫ (аудио) -----
+    function makeKnob(id, min, max, init, callback) {
+        const el = document.getElementById(id);
+        let val = init;
+        const span = document.getElementById(id.replace('knob','')+'Val');
+        const update = () => { let perc=(val-min)/(max-min); el.style.setProperty('--val',perc); if(span) span.innerText=val.toFixed(1); el.setAttribute('data-val',val); callback(val); };
+        const set = (v) => { val = Math.min(max,Math.max(min,v)); update(); };
+        set(init);
+        el.addEventListener('mousedown', (e) => {
+            const startX=e.clientX, startVal=val;
+            const move = (me) => { let delta=(me.clientX-startX)*0.008; set(startVal+delta*(max-min)); };
+            const up = () => { window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); };
+            window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+            e.preventDefault();
+        });
+    }
+    makeKnob('knobLow',-12,12,0,()=>updateAudioFX());
+    makeKnob('knobMid',-12,12,0,()=>updateAudioFX());
+    makeKnob('knobHigh',-12,12,0,()=>updateAudioFX());
+    makeKnob('knobThr',-40,0,-20,()=>updateAudioFX());
+    makeKnob('knobDist',0,1.2,0,()=>updateAudioFX());
+    makeKnob('knobRev',0,1,0,()=>updateAudioFX());
+    makeKnob('knobLfoSpeed',0.1,2,0.5,(v)=>globalLfoSpeed=v);
+    makeKnob('knobLfoDepth',0,1,0.3,(v)=>globalLfoDepth=v);
+    document.getElementById('resetLfoBtn').onclick = () => { layers.forEach(l=>{ Object.keys(l.lfo).forEach(k=>{ if(l.lfo[k]) { l.lfo[k].enabled=false; l.lfo[k].speed=0.5; l.lfo[k].depth=0.3; } }); }); renderLayersUI(); };
+
+    // ----- Ручное рисование -----
+    document.getElementById('drawModeBtn').onclick = () => { drawMode=!drawMode; document.getElementById('drawModeBtn').innerText=drawMode?'✏️ 描画中':'✏️ 手描きモード'; };
+    document.getElementById('clearDrawBtn').onclick = () => { drawPoints=[]; };
+    canvas.addEventListener('mousedown',(e)=>{ if(!drawMode) return; isDrawing=true; const rect=canvas.getBoundingClientRect(); let sx=(e.clientX-rect.left)*(canvas.width/rect.width); let sy=(e.clientY-rect.top)*(canvas.height/rect.height); drawPoints.push({x:sx,y:sy}); });
+    canvas.addEventListener('mousemove',(e)=>{ if(!drawMode || !isDrawing) return; const rect=canvas.getBoundingClientRect(); let sx=(e.clientX-rect.left)*(canvas.width/rect.width); let sy=(e.clientY-rect.top)*(canvas.height/rect.height); drawPoints.push({x:sx,y:sy}); });
+    canvas.addEventListener('mouseup',()=>{ isDrawing=false; });
+
+    // ----- Анимация -----
+    function animate() {
+        updateAudioMeters();
+        drawAllLayers();
+        lfoPhase += 0.01;
+        animTime += 0.02;
+        requestAnimationFrame(animate);
+    }
+    animate();
+
+    // ----- Драг панелей -----
+    function makeDrag(panel) {
+        const head = panel.querySelector('.panel-header');
+        if(!head) return;
+        let isDrag=false, offX, offY;
+        head.onmousedown = (e) => {
+            isDrag=true; offX=e.clientX-panel.offsetLeft; offY=e.clientY-panel.offsetTop;
+            panel.style.zIndex=1002; document.body.style.userSelect='none';
+            const move=(me)=>{ if(!isDrag) return; let left=me.clientX-offX, top=me.clientY-offY; left=Math.min(Math.max(left,0),window.innerWidth-panel.offsetWidth); top=Math.min(Math.max(top,0),window.innerHeight-panel.offsetHeight); panel.style.left=left+'px'; panel.style.top=top+'px'; };
+            const up=()=>{ isDrag=false; document.body.style.userSelect=''; window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); };
+            window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+            e.preventDefault();
         };
-        
-        function updateAudioMeters() {
-            if (!isAudioActive || !_audioNodes?.analys) { avgVolume *= 0.98; bassEnergy *= 0.98; highEnergy *= 0.98; return; }
-            const analys = _audioNodes.analys;
-            const freqLen = analys.frequencyBinCount;
-            if (freqData.length !== freqLen) { freqData = new Uint8Array(freqLen); timeData = new Uint8Array(analyser.fftSize); }
-            analys.getByteFrequencyData(freqData);
-            analys.getByteTimeDomainData(timeData);
-            let sum=0, bass=0, high=0;
-            for (let i=0; i<freqLen; i++) { let v = freqData[i]/255; sum += v; if (i<12) bass+=v; if (i>60) high+=v; }
-            avgVolume = sum / freqLen;
-            bassEnergy = bass/12;
-            highEnergy = high/(freqLen-60);
-            const vu = Math.min(1.0, avgVolume*1.5);
-            document.getElementById('vuFill').style.width = (vu*100)+'%';
-            document.getElementById('vuText').innerText = Math.floor(vu*100)+'%';
-            document.getElementById('bassFill').style.width = (Math.min(1.0, bassEnergy*1.5)*100)+'%';
-            document.getElementById('highFill').style.width = (Math.min(1.0, highEnergy*1.5)*100)+'%';
-            // спектрограмма
-            const specCanvas = document.getElementById('spectrogramCanvas');
-            if (specCanvas && freqData.length) {
-                const sCtx = specCanvas.getContext('2d');
-                const w = specCanvas.width, h = specCanvas.height;
-                const img = sCtx.getImageData(1, 0, w-1, h);
-                sCtx.putImageData(img, 0, 0);
-                sCtx.fillStyle = '#000';
-                sCtx.fillRect(w-1, 0, 1, h);
-                for (let i=0; i<freqData.length; i++) {
-                    let barH = (freqData[i]/255) * h;
-                    sCtx.fillStyle = '#fff';
-                    sCtx.fillRect(w-1, h-barH, 1, barH);
-                }
-            }
-            // обычный спектр
-            const specCanvas2 = document.getElementById('spectrumCanvas');
-            if (specCanvas2 && freqData.length) {
-                const sCtx2 = specCanvas2.getContext('2d');
-                sCtx2.fillStyle = '#000';
-                sCtx2.fillRect(0, 0, specCanvas2.width, specCanvas2.height);
-                let bw = specCanvas2.width / freqLen;
-                for (let i=0; i<freqLen; i++) {
-                    let h = (freqData[i]/255) * specCanvas2.height;
-                    sCtx2.fillStyle = '#fff';
-                    sCtx2.fillRect(i*bw, specCanvas2.height-h, Math.max(1,bw-1), h);
-                }
-            }
-            // envelope
-            const envCanvas = document.getElementById('envelopeCanvas');
-            if (envCanvas && freqData.length) {
-                const eCtx = envCanvas.getContext('2d');
-                eCtx.fillStyle = '#000';
-                eCtx.fillRect(0, 0, envCanvas.width, envCanvas.height);
-                const step = Math.floor(freqData.length / envCanvas.width);
-                eCtx.beginPath();
-                for (let x=0; x<envCanvas.width; x++) {
-                    let idx = Math.min(freqData.length-1, x*step);
-                    let val = freqData[idx]/255;
-                    let y = envCanvas.height - val * envCanvas.height;
-                    if (x===0) eCtx.moveTo(x, y);
-                    else eCtx.lineTo(x, y);
-                }
-                eCtx.strokeStyle = '#fff';
-                eCtx.stroke();
-            }
-            let maxIdx=0;
-            for (let i=0; i<freqData.length; i++) if (freqData[i] > freqData[maxIdx]) maxIdx = i;
-            const dominantHz = (maxIdx * (audioCtx?.sampleRate || 44100)) / (analyser?.fftSize || 512);
-            document.getElementById('dominantFreq').innerHTML = `ドミナント周波数: ${Math.round(dominantHz)} Hz`;
-        }
-        
-        // Глобальные ползунки
-        document.getElementById('globalGlitch').oninput = (e) => { globalGlitch = parseFloat(e.target.value); document.getElementById('globalGlitchVal').innerText = globalGlitch.toFixed(2); };
-        document.getElementById('globalPixel').oninput = (e) => { globalPixel = parseInt(e.target.value); document.getElementById('globalPixelVal').innerText = globalPixel; };
-        document.getElementById('lowEQ').oninput = (e) => { lowEQ = parseFloat(e.target.value); document.getElementById('lowEQVal').innerText = lowEQ; updateAudioFX(); };
-        document.getElementById('midEQ').oninput = (e) => { midEQ = parseFloat(e.target.value); document.getElementById('midEQVal').innerText = midEQ; updateAudioFX(); };
-        document.getElementById('highEQ').oninput = (e) => { highEQ = parseFloat(e.target.value); document.getElementById('highEQVal').innerText = highEQ; updateAudioFX(); };
-        document.getElementById('compThresh').oninput = (e) => { compThresh = parseFloat(e.target.value); document.getElementById('threshVal').innerText = compThresh; updateAudioFX(); };
-        document.getElementById('distAmt').oninput = (e) => { distAmt = parseFloat(e.target.value); document.getElementById('distVal').innerText = distAmt.toFixed(2); updateAudioFX(); };
-        document.getElementById('reverbMix').oninput = (e) => { reverbMix = parseFloat(e.target.value); document.getElementById('reverbVal').innerText = reverbMix.toFixed(2); updateAudioFX(); };
-        
-        document.getElementById('addCurveBtn').onclick = () => {
-            let type = document.getElementById('newCurveType').value;
-            addCurve(type);
-        };
-        
-        // Инициализация: добавим 2 кривые по умолчанию (супер и лиссажу)
-        addCurve('super');
-        addCurve('lissajous');
-        
-        // Анимация
-        function animate() {
-            updateAudioMeters();
-            drawAllCurves();
-            animTime += 0.016;
-            requestAnimationFrame(animate);
-        }
-        animate();
-        
-        // Ресайз canvas
-        function resizeCanvas() {
-            const container = document.getElementById('mainCanvasContainer');
-            const w = container.clientWidth * 0.8;
-            canvas.style.width = w + 'px';
-            canvas.width = 900;
-            canvas.height = 600;
-            width = canvas.width;
-            height = canvas.height;
-            centerX = width/2;
-            centerY = height/2;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-        
-        // Перетаскивание окон
-        function makeDraggable(panel) {
-            const header = panel.querySelector('.panel-header');
-            if (!header) return;
-            let isDrag=false, offX, offY;
-            header.onmousedown = (e) => {
-                isDrag=true;
-                offX = e.clientX - panel.offsetLeft;
-                offY = e.clientY - panel.offsetTop;
-                panel.style.zIndex = 1002;
-                document.body.style.userSelect='none';
-                const onMove = (me) => {
-                    if (!isDrag) return;
-                    let left = me.clientX - offX;
-                    let top = me.clientY - offY;
-                    left = Math.min(Math.max(left,0), window.innerWidth - panel.offsetWidth);
-                    top = Math.min(Math.max(top,0), window.innerHeight - panel.offsetHeight);
-                    panel.style.left = left+'px';
-                    panel.style.top = top+'px';
-                };
-                const onUp = () => {
-                    isDrag=false;
-                    document.body.style.userSelect='';
-                    window.removeEventListener('mousemove', onMove);
-                    window.removeEventListener('mouseup', onUp);
-                };
-                window.addEventListener('mousemove', onMove);
-                window.addEventListener('mouseup', onUp);
-                e.preventDefault();
-            };
-        }
-        document.querySelectorAll('.panel').forEach(p=>makeDraggable(p));
-    })();
+    }
+    document.querySelectorAll('.panel').forEach(p=>makeDrag(p));
+
+    // ----- Ресайз -----
+    window.addEventListener('resize',()=>{ let cont=document.getElementById('canvasContainer'); if(cont){ let newW=cont.clientWidth*0.8; canvas.style.width=newW+'px'; canvas.width=800; canvas.height=600; w=800; h=600; centerX=w/2; centerY=h/2; } });
+    window.dispatchEvent(new Event('resize'));
+
+    // ----- Стартовые слои -----
+    layers.push(createLayer('super'));
+    layers.push(createLayer('lissajous'));
+    renderLayersUI();
+})();
 </script>
 </body>
 </html>
