@@ -3,10 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>黒白・多層曲線＋LFO＋音響分析 (安定版)</title>
+    <title>黒白・多層曲線＋音響分析 (安定版)</title>
     <style>
-        * { user-select: none; box-sizing: border-box; }
-        body { margin: 0; background: #000; font-family: 'Courier New', monospace; overflow: hidden; }
+        * {
+            user-select: none;
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            background: #000;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
         .panel {
             position: absolute;
             background: #000;
@@ -59,7 +67,11 @@
             transform: translateX(-50%) rotate(calc( var(--val, 0) * 270deg ));
             transform-origin: bottom center;
         }
-        .knob-value { width: 45px; text-align: right; font-family: monospace; }
+        .knob-value {
+            width: 45px;
+            text-align: right;
+            font-family: monospace;
+        }
         button, select {
             background: #000;
             border: 1px solid #fff;
@@ -71,18 +83,62 @@
             font-family: monospace;
             font-size: 10px;
         }
-        button:hover { background: #fff; color: #000; }
-        canvas { display: block; background: #0a0a0a; border: 1px solid #fff; margin-top: 6px; }
-        .meter { border: 1px solid #fff; padding: 3px; margin: 6px 0; }
-        .meter-bar { height: 5px; background: #222; }
-        .meter-fill { width: 0%; height: 100%; background: #fff; }
-        .status { font-size: 8px; margin-top: 6px; text-align: center; }
-        .flex { display: flex; gap: 6px; margin: 6px 0; }
-        .small { font-size: 8px; }
-        .layer-card { border: 1px solid #444; padding: 5px; margin-bottom: 8px; background: #111; }
-        .layer-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
-        input[type="range"] { width: 100px; background: #333; }
-        .param-group { display: inline-block; width: 100%; }
+        button:hover {
+            background: #fff;
+            color: #000;
+        }
+        canvas {
+            display: block;
+            background: #0a0a0a;
+            border: 1px solid #fff;
+            margin-top: 6px;
+        }
+        .meter {
+            border: 1px solid #fff;
+            padding: 3px;
+            margin: 6px 0;
+        }
+        .meter-bar {
+            height: 5px;
+            background: #222;
+        }
+        .meter-fill {
+            width: 0%;
+            height: 100%;
+            background: #fff;
+        }
+        .status {
+            font-size: 8px;
+            margin-top: 6px;
+            text-align: center;
+        }
+        .flex {
+            display: flex;
+            gap: 6px;
+            margin: 6px 0;
+        }
+        .small {
+            font-size: 8px;
+        }
+        .layer-card {
+            border: 1px solid #444;
+            padding: 5px;
+            margin-bottom: 8px;
+            background: #111;
+        }
+        .layer-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        input[type="range"] {
+            width: 100px;
+            background: #333;
+        }
+        .param-group {
+            display: inline-block;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -131,13 +187,13 @@
 
 <script>
 (function(){
-    // ----- キャンバス -----
+    // ---------- キャンバス ----------
     const canvas = document.getElementById('mainCanvas');
     const ctx = canvas.getContext('2d');
     let w = 800, h = 600;
     let centerX = w/2, centerY = h/2;
 
-    // ----- グローバル -----
+    // ---------- グローバル変数 ----------
     let layers = [];
     let nextId = 1;
     let globalLfoSpeed = 0.5;
@@ -148,7 +204,7 @@
     let isDrawing = false;
     let animTime = 0;
 
-    // ----- スーパーフォーミュラ -----
+    // ---------- スーパーフォーミュラ ----------
     function superformula(phi, m, n1, n2, n3, r0) {
         const a = 1.0, b = 1.0;
         const t1 = Math.pow(Math.abs(Math.cos(m * phi / 4) / a), n2);
@@ -157,23 +213,23 @@
         return r0 * (isNaN(r) ? 1 : Math.min(2.5, r));
     }
 
-    // ----- LFO применения -----
+    // ---------- LFO適用 ----------
     function applyLFO(layer, paramName, base, minV, maxV) {
         const lfo = layer.lfo[paramName];
         if (!lfo || !lfo.enabled) return base;
         const speed = lfo.speed * globalLfoSpeed;
-        const depth = lfo.depth * globalLfoDepth;
+        const depth = lfo.depth *全球Lfo深度;
         const mod = Math.sin(lfoPhase * Math.PI * 2 * speed) * depth;
         let val = base + mod * (maxV - minV) * 0.3;
         return Math.min(maxV, Math.max(minV, val));
     }
 
-    // ----- Отрисовка всех слоёв -----
+    // ---------- 全レイヤー描画 ----------
     function drawAllLayers() {
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, w, h);
-        // ручной слой
+        // 手描き
         if (drawPoints.length > 1) {
             ctx.beginPath();
             ctx.strokeStyle = '#fff';
@@ -229,12 +285,12 @@
         }
     }
 
-    // ----- LFO инициализация -----
+    // ---------- LFO初期化ヘルパー ----------
     function initLfo(layer, param) {
         if (!layer.lfo[param]) layer.lfo[param] = { enabled: false, speed: 0.5, depth: 0.3 };
     }
 
-    // ----- Создание слоя -----
+    // ---------- レイヤー作成 ----------
     function createLayer(type) {
         let layer = {
             id: nextId++,
@@ -254,7 +310,7 @@
         return layer;
     }
 
-    // ----- UI слоёв -----
+    // ---------- UI レンダリング ----------
     function renderLayersUI() {
         const container = document.getElementById('layersList');
         if (!container) return;
@@ -322,13 +378,11 @@
         document.querySelectorAll('.lfoDepth').forEach(sl => sl.oninput = () => { let l=layers.find(l=>l.id==parseInt(sl.dataset.id)); if(l && l.lfo[sl.dataset.param]) { l.lfo[sl.dataset.param].depth=parseFloat(sl.value); sl.nextElementSibling.innerText=l.lfo[sl.dataset.param].depth.toFixed(2); } });
     }
 
-    // ----- АУДИО (стабильная версия) -----
+    // ---------- Аудио (стабильная реализация) ----------
     let audioCtx = null;
     let sourceNode = null;
-    let analyserNode = null;
     let isAudioActive = false;
     let audioNodes = null;
-    let audioFileBuffer = null;
     let freqData = [], timeData = [];
     let avgVolume = 0, bassEnergy = 0, highEnergy = 0;
 
@@ -461,7 +515,7 @@
         document.getElementById('dominantFreq').innerHTML = `ドミナント: ${Math.round(dom)} Hz`;
     }
 
-    // ----- НОБЫ (аудио) -----
+    // ---------- ノブ制御 ----------
     function makeKnob(id, min, max, init, callback) {
         const el = document.getElementById(id);
         let val = init;
@@ -487,14 +541,14 @@
     makeKnob('knobLfoDepth',0,1,0.3,(v)=>globalLfoDepth=v);
     document.getElementById('resetLfoBtn').onclick = () => { layers.forEach(l=>{ Object.keys(l.lfo).forEach(k=>{ if(l.lfo[k]) { l.lfo[k].enabled=false; l.lfo[k].speed=0.5; l.lfo[k].depth=0.3; } }); }); renderLayersUI(); };
 
-    // ----- Ручное рисование -----
+    // ---------- Ручное рисование ----------
     document.getElementById('drawModeBtn').onclick = () => { drawMode=!drawMode; document.getElementById('drawModeBtn').innerText=drawMode?'✏️ 描画中':'✏️ 手描きモード'; };
     document.getElementById('clearDrawBtn').onclick = () => { drawPoints=[]; };
     canvas.addEventListener('mousedown',(e)=>{ if(!drawMode) return; isDrawing=true; const rect=canvas.getBoundingClientRect(); let sx=(e.clientX-rect.left)*(canvas.width/rect.width); let sy=(e.clientY-rect.top)*(canvas.height/rect.height); drawPoints.push({x:sx,y:sy}); });
     canvas.addEventListener('mousemove',(e)=>{ if(!drawMode || !isDrawing) return; const rect=canvas.getBoundingClientRect(); let sx=(e.clientX-rect.left)*(canvas.width/rect.width); let sy=(e.clientY-rect.top)*(canvas.height/rect.height); drawPoints.push({x:sx,y:sy}); });
     canvas.addEventListener('mouseup',()=>{ isDrawing=false; });
 
-    // ----- Анимация -----
+    // ---------- Анимация ----------
     function animate() {
         updateAudioMeters();
         drawAllLayers();
@@ -504,12 +558,12 @@
     }
     animate();
 
-    // ----- Драг панелей -----
-    function makeDrag(panel) {
-        const head = panel.querySelector('.panel-header');
-        if(!head) return;
+    // ---------- Перетаскивание окон ----------
+    function makeDraggable(panel) {
+        const header = panel.querySelector('.panel-header');
+        if (!header) return;
         let isDrag=false, offX, offY;
-        head.onmousedown = (e) => {
+        header.onmousedown = (e) => {
             isDrag=true; offX=e.clientX-panel.offsetLeft; offY=e.clientY-panel.offsetTop;
             panel.style.zIndex=1002; document.body.style.userSelect='none';
             const move=(me)=>{ if(!isDrag) return; let left=me.clientX-offX, top=me.clientY-offY; left=Math.min(Math.max(left,0),window.innerWidth-panel.offsetWidth); top=Math.min(Math.max(top,0),window.innerHeight-panel.offsetHeight); panel.style.left=left+'px'; panel.style.top=top+'px'; };
@@ -518,13 +572,13 @@
             e.preventDefault();
         };
     }
-    document.querySelectorAll('.panel').forEach(p=>makeDrag(p));
+    document.querySelectorAll('.panel').forEach(p=>makeDraggable(p));
 
-    // ----- Ресайз -----
+    // ---------- Ресайз ----------
     window.addEventListener('resize',()=>{ let cont=document.getElementById('canvasContainer'); if(cont){ let newW=cont.clientWidth*0.8; canvas.style.width=newW+'px'; canvas.width=800; canvas.height=600; w=800; h=600; centerX=w/2; centerY=h/2; } });
     window.dispatchEvent(new Event('resize'));
 
-    // ----- Стартовые слои -----
+    // ---------- Стартовые слои ----------
     layers.push(createLayer('super'));
     layers.push(createLayer('lissajous'));
     renderLayersUI();
